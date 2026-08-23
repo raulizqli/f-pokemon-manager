@@ -1,0 +1,73 @@
+@baseUrl = http://localhost:4000
+
+### Health
+GET {{baseUrl}}/health
+
+### Register
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "trainer@example.com",
+  "password": "password123",
+  "displayName": "Trainer Red"
+}
+
+### Login
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "trainer@example.com",
+  "password": "password123"
+}
+
+### Me
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### List Pokémon
+GET {{baseUrl}}/api/pokemon?limit=10&offset=0
+
+### Search Pokémon
+GET {{baseUrl}}/api/pokemon?search=pika&limit=10
+
+### Pokémon Detail
+GET {{baseUrl}}/api/pokemon/25
+
+### Add to Collection
+POST {{baseUrl}}/api/collection
+Authorization: Bearer {{login.response.body.accessToken}}
+Content-Type: application/json
+
+{
+  "pokemonId": 25,
+  "nickname": "Sparky",
+  "status": "caught",
+  "notes": "My first Pokémon!"
+}
+
+### List Collection
+GET {{baseUrl}}/api/collection
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Collection Stats
+GET {{baseUrl}}/api/collection/stats
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### AI Status
+GET {{baseUrl}}/api/ai/status
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### AI Insights
+POST {{baseUrl}}/api/ai/insights
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Logout
+POST {{baseUrl}}/api/auth/logout
+Content-Type: application/json
+
+{
+  "refreshToken": "{{login.response.body.refreshToken}}"
+}

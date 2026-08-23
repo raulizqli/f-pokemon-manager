@@ -1,0 +1,59 @@
+import { FormEvent, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { Card, CardTitle } from '../components/ui/Card';
+import type { ApiError } from '../services/apiClient';
+
+export function LoginPage() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await login({ email, password });
+      navigate('/app');
+    } catch (err) {
+      setError((err as ApiError).error ?? 'Login failed');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mx-auto flex max-w-md flex-col gap-6 px-4 py-16">
+      <Card>
+        <CardTitle>Welcome back</CardTitle>
+        <p className="mt-2 text-sm text-poke-dark/60">Sign in to access your collection.</p>
+        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <Input
+            label="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <Button type="submit" disabled={loading} className="w-full">
+            {loading ? 'Signing in…' : 'Sign in'}
+          </Button>
+        </form>
+        <p className="mt-4 text-center text-sm text-poke-dark/60">
+          No account?{' '}
+          <Link to="/register" className="font-medium text-poke-sage hover:underline">
+            Register
+          </Link>
+        </p>
+      </Card>
+    </div>
+  );
+}

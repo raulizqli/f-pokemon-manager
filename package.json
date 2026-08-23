@@ -1,0 +1,20 @@
+{
+  "name": "pokedex-manager",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"npm run dev -w @pokedex/api\" \"npm run dev -w @pokedex/web\"",
+    "dev:api": "npm run dev -w @pokedex/api",
+    "dev:web": "npm run dev -w @pokedex/web",
+    "build": "npm run build -w @pokedex/shared && npm run build -w @pokedex/api && npm run build -w @pokedex/web",
+    "test": "npm run test -w @pokedex/api && npm run test -w @pokedex/web",
+    "lint": "npm run lint -w @pokedex/api && npm run lint -w @pokedex/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

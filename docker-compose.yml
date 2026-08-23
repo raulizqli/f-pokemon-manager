@@ -1,0 +1,48 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pokedex}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pokedex}
+      POSTGRES_DB: ${POSTGRES_DB:-pokedex}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pokedex_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pokedex"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - "4000:4000"
+    environment:
+      DATABASE_URL: postgresql://pokedex:pokedex@db:5432/pokedex
+      PORT: 4000
+      NODE_ENV: development
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev-access-secret-min-16-chars}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-refresh-secret-min-16-chars}
+      CORS_ORIGIN: http://localhost:5177
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "5177:80"
+    environment:
+      VITE_API_URL: http://localhost:4000
+    depends_on:
+      - api
+
+volumes:
+  pokedex_data:

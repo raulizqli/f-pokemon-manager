@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+@theme {
+  --color-poke-cream: #f4f1ea;
+  --color-poke-dark: #2a342d;
+  --color-poke-sage: #4a5d4e;
+  --color-poke-accent: #e63946;
+  --color-poke-yellow: #ffd166;
+  --color-poke-blue: #457b9d;
+  --font-serif: "Georgia", "Times New Roman", serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+}
+
+body {
+  @apply bg-poke-cream text-poke-dark font-sans antialiased;
+}
