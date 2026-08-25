@@ -2,8 +2,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { Env } from '../../config/env.js';
 import type { CollectionRepository } from '../collection/collectionRepository.js';
 import type { PokeApiClient } from '../../lib/pokeApiClient.js';
-import { QuotaExceededError, ServiceUnavailableError } from '../../lib/errors.js';
 import { AiService } from './aiService.js';
+import { LOCAL_INSIGHTS_MODEL } from './aiLocalInsights.js';
 
 const baseEnv: Env = {
   NODE_ENV: 'test',
@@ -180,7 +180,7 @@ describe('AiService Gemini → OpenAI fallback', () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain('generativelanguage.googleapis.com');
   });
 
-  it('throws quota when Gemini is over quota and OpenAI is not configured', async () => {
+  it('returns local insights when Gemini is over quota and OpenAI is not configured', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -192,16 +192,52 @@ describe('AiService Gemini → OpenAI fallback', () => {
       ),
     );
 
-    await expect(
-      createService({ GEMINI_API_KEY: 'gemini-key' }).getInsights('user-1'),
-    ).rejects.toBeInstanceOf(QuotaExceededError);
+    const result = await createService({ GEMINI_API_KEY: 'gemini-key' }).getInsights('user-1');
+
+    expect(result.enabled).toBe(true);
+    expect(result.provider).toBeNull();
+    expect(result.model).toBe(LOCAL_INSIGHTS_MODEL);
+    expect(result.insights).toContain('1 Pokémon');
+    expect(result.recommendations).toHaveLength(3);
+    expect(result.warnings).toEqual([{ code: 'QUOTA_EXCEEDED', provider: 'gemini' }]);
   });
 
-  it('throws when Gemini fails and OpenAI is not configured', async () => {
+  it('returns local insights when both providers hit quota', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          { error: { message: 'You exceeded your current quota', type: 'insufficient_quota' } },
+          false,
+          429,
+        ),
+      ),
+    );
+
+    const result = await createService({
+      GEMINI_API_KEY: 'gemini-key',
+      OPENAI_API_KEY: 'openai-key',
+    }).getInsights('user-1');
+
+    expect(result.provider).toBeNull();
+    expect(result.model).toBe(LOCAL_INSIGHTS_MODEL);
+    expect(result.insights).toBeTruthy();
+    expect(result.recommendations).toHaveLength(3);
+    expect(result.warnings).toEqual([
+      { code: 'QUOTA_EXCEEDED', provider: 'gemini' },
+      { code: 'QUOTA_EXCEEDED', provider: 'openai' },
+    ]);
+  });
+
+  it('returns local insights when Gemini fails and OpenAI is not configured', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({}, false, 500)));
 
-    await expect(
-      createService({ GEMINI_API_KEY: 'gemini-key' }).getInsights('user-1'),
-    ).rejects.toBeInstanceOf(ServiceUnavailableError);
+    const result = await createService({ GEMINI_API_KEY: 'gemini-key' }).getInsights('user-1');
+
+    expect(result.provider).toBeNull();
+    expect(result.model).toBe(LOCAL_INSIGHTS_MODEL);
+    expect(result.insights).toBeTruthy();
+    expect(result.recommendations).toHaveLength(3);
+    expect(result.warnings).toBeUndefined();
   });
 });

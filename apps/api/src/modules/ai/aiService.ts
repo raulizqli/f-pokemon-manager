@@ -1,9 +1,10 @@
 import type { AiInsightsResponse, AiProvider, AiWarning } from '@pokedex/shared';
 import type { Env } from '../../config/env.js';
 import { mapWithConcurrency } from '../../lib/concurrency.js';
-import { QuotaExceededError, ServiceUnavailableError } from '../../lib/errors.js';
+import { ServiceUnavailableError } from '../../lib/errors.js';
 import type { CollectionRepository } from '../collection/collectionRepository.js';
 import { PokeApiClient } from '../../lib/pokeApiClient.js';
+import { buildLocalInsights, LOCAL_INSIGHTS_MODEL } from './aiLocalInsights.js';
 
 type InsightsPayload = {
   insights: string | null;
@@ -41,7 +42,8 @@ function isQuotaFailure(status: number, body: ProviderErrorBody): boolean {
     message.includes('insufficient_quota') ||
     message.includes('exceeded your current quota') ||
     message.includes('quota exceeded') ||
-    (status === 429 && message.includes('quota'))
+    message.includes('resource exhausted') ||
+    (status === 429 && (message.includes('quota') || code === 'RESOURCE_EXHAUSTED'))
   );
 }
 
@@ -54,9 +56,7 @@ async function readProviderError(response: Response, providerLabel: string): Pro
   }
 
   if (isQuotaFailure(response.status, body)) {
-    throw new QuotaExceededError(
-      `${providerLabel} quota exceeded. Check your plan and billing details.`,
-    );
+    throw new ServiceUnavailableError(`${providerLabel} quota exceeded`);
   }
 
   const detail = body.error?.message ?? body.error?.code ?? `HTTP ${response.status}`;
@@ -68,6 +68,10 @@ function geminiModelCandidates(preferred?: string): string[] {
     (model): model is string => Boolean(model?.trim()),
   );
   return [...new Set(models)];
+}
+
+function providerFromLabel(label: string): AiProvider {
+  return label === 'OpenAI' ? 'openai' : 'gemini';
 }
 
 export class AiService {
@@ -128,9 +132,10 @@ Sample Pokémon: ${entries.slice(0, 8).map((e) => e.pokemonName).join(', ')}.
 Provide a brief, friendly analysis (2-3 sentences) and exactly 3 Pokémon name recommendations to diversify their collection. Respond ONLY with valid JSON (no markdown): {"insights":"...","recommendations":["name1","name2","name3"]}`;
 
     const warnings: AiWarning[] = [];
-    let lastError: unknown;
+    let providersAttempted = false;
 
     if (this.env.GEMINI_API_KEY) {
+      providersAttempted = true;
       const models = geminiModelCandidates(this.env.GEMINI_MODEL);
       for (const model of models) {
         try {
@@ -142,26 +147,20 @@ Provide a brief, friendly analysis (2-3 sentences) and exactly 3 Pokémon name r
             warnings,
           );
         } catch (error) {
-          lastError = error;
           console.warn(
             `[ai] Gemini model ${model} failed`,
             error instanceof Error ? error.message : error,
           );
-          if (error instanceof QuotaExceededError) {
-            warnings.push({ code: 'QUOTA_EXCEEDED', provider: 'gemini' });
-          }
+          this.recordProviderFailure('Gemini', error, warnings);
         }
       }
-      if (!this.env.OPENAI_API_KEY) {
-        if (lastError instanceof QuotaExceededError || lastError instanceof ServiceUnavailableError) {
-          throw lastError;
-        }
-        throw new ServiceUnavailableError('Failed to generate AI insights');
+      if (this.env.OPENAI_API_KEY) {
+        console.warn('[ai] Gemini failed — switching to OpenAI fallback');
       }
-      console.warn('[ai] Gemini failed — switching to OpenAI fallback');
     }
 
     if (this.env.OPENAI_API_KEY) {
+      providersAttempted = true;
       try {
         return await this.completeWithProvider(
           'openai',
@@ -170,21 +169,60 @@ Provide a brief, friendly analysis (2-3 sentences) and exactly 3 Pokémon name r
           warnings,
         );
       } catch (error) {
-        lastError = error;
-        console.warn(
-          '[ai] OpenAI failed',
-          error instanceof Error ? error.message : error,
-        );
-        if (error instanceof QuotaExceededError) {
-          warnings.push({ code: 'QUOTA_EXCEEDED', provider: 'openai' });
-        }
+        console.warn('[ai] OpenAI failed', error instanceof Error ? error.message : error);
+        this.recordProviderFailure('OpenAI', error, warnings);
       }
     }
 
-    if (lastError instanceof QuotaExceededError || lastError instanceof ServiceUnavailableError) {
-      throw lastError;
+    if (providersAttempted) {
+      console.warn('[ai] All providers failed — returning local heuristic insights');
+      return this.completeWithLocalFallback({
+        stats,
+        topTypes,
+        sampleNames: entries.map((e) => e.pokemonName),
+        warnings,
+      });
     }
+
     throw new ServiceUnavailableError('Failed to generate AI insights');
+  }
+
+  private recordProviderFailure(
+    providerLabel: string,
+    error: unknown,
+    warnings: AiWarning[],
+  ): void {
+    const message = error instanceof Error ? error.message.toLowerCase() : '';
+    if (message.includes('quota exceeded') || message.includes('resource exhausted')) {
+      const provider = providerFromLabel(providerLabel);
+      if (warnings.some((warning) => warning.provider === provider)) return;
+      warnings.push({
+        code: 'QUOTA_EXCEEDED',
+        provider,
+      });
+    }
+  }
+
+  private completeWithLocalFallback(params: {
+    stats: { total: number; byStatus: Record<string, number> };
+    topTypes: string[];
+    sampleNames: string[];
+    warnings: AiWarning[];
+  }): AiInsightsResponse {
+    const local = buildLocalInsights({
+      total: params.stats.total,
+      byStatus: params.stats.byStatus,
+      topTypes: params.topTypes,
+      sampleNames: params.sampleNames,
+    });
+    return {
+      enabled: true,
+      provider: null,
+      model: LOCAL_INSIGHTS_MODEL,
+      insights: local.insights,
+      recommendations: local.recommendations,
+      ...(params.warnings.length > 0 ? { warnings: params.warnings } : {}),
+    };
   }
 
   private async completeWithProvider(
