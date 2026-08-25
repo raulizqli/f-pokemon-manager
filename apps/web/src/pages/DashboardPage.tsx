@@ -25,7 +25,10 @@ export function DashboardPage() {
   const stats = statsQuery.data;
   const pendingIncoming =
     tradesQuery.data?.filter((t) => t.status === 'pending' && t.recipient.id === user?.id).length ?? 0;
-  const aiError = aiInsightsQuery.error as ApiError | undefined;
+  const aiError =
+    aiInsightsQuery.error && typeof aiInsightsQuery.error === 'object' && 'error' in aiInsightsQuery.error
+      ? (aiInsightsQuery.error as ApiError)
+      : undefined;
   const quotaWarning = aiInsightsQuery.data?.warnings?.find((warning) => warning.code === 'QUOTA_EXCEEDED');
 
   return (

@@ -13,9 +13,18 @@ type ProviderErrorBody = {
   error?: { message?: string; code?: string; status?: string; type?: string };
 };
 
+const GEMINI_FALLBACK_MODELS = ['gemini-flash-latest', 'gemini-3-flash-preview'] as const;
+
 function parseInsightsPayload(content: string): InsightsPayload {
   const trimmed = content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-  const parsed = JSON.parse(trimmed) as { insights?: string; recommendations?: string[] };
+  let parsed: { insights?: string; recommendations?: string[] };
+  try {
+    parsed = JSON.parse(trimmed) as { insights?: string; recommendations?: string[] };
+  } catch {
+    const match = trimmed.match(/\{[\s\S]*\}/);
+    if (!match) throw new ServiceUnavailableError('Empty AI response');
+    parsed = JSON.parse(match[0]) as { insights?: string; recommendations?: string[] };
+  }
   return {
     insights: parsed.insights ?? null,
     recommendations: parsed.recommendations ?? [],
@@ -51,6 +60,13 @@ async function readProviderError(response: Response, providerLabel: string): Pro
 
   const detail = body.error?.message ?? body.error?.code ?? `HTTP ${response.status}`;
   throw new ServiceUnavailableError(`${providerLabel} unavailable: ${detail}`);
+}
+
+function geminiModelCandidates(preferred?: string): string[] {
+  const models = [preferred, ...GEMINI_FALLBACK_MODELS].filter(
+    (model): model is string => Boolean(model?.trim()),
+  );
+  return [...new Set(models)];
 }
 
 export class AiService {
@@ -104,10 +120,10 @@ Status breakdown: ${JSON.stringify(stats.byStatus)}.
 Top types in collection: ${topTypes.join(', ') || 'unknown'}.
 Sample Pokémon: ${entries.slice(0, 8).map((e) => e.pokemonName).join(', ')}.
 
-Provide a brief, friendly analysis (2-3 sentences) and exactly 3 Pokémon name recommendations to diversify their collection. Respond in JSON: {"insights":"...","recommendations":["name1","name2","name3"]}`;
+Provide a brief, friendly analysis (2-3 sentences) and exactly 3 Pokémon name recommendations to diversify their collection. Respond ONLY with valid JSON (no markdown): {"insights":"...","recommendations":["name1","name2","name3"]}`;
 
     const warnings: AiWarning[] = [];
-    let openaiError: unknown;
+    let lastError: unknown;
 
     if (this.env.OPENAI_API_KEY) {
       try {
@@ -115,9 +131,9 @@ Provide a brief, friendly analysis (2-3 sentences) and exactly 3 Pokémon name r
           this.completeWithOpenAi(prompt),
         );
       } catch (error) {
-        openaiError = error;
+        lastError = error;
         console.warn(
-          '[ai] OpenAI insights failed, trying Gemini fallback',
+          '[ai] OpenAI failed — switching to Gemini fallback',
           error instanceof Error ? error.message : error,
         );
         if (error instanceof QuotaExceededError) {
@@ -132,20 +148,29 @@ Provide a brief, friendly analysis (2-3 sentences) and exactly 3 Pokémon name r
     }
 
     if (this.env.GEMINI_API_KEY) {
-      try {
-        return await this.completeWithProvider(
-          'gemini',
-          this.env.GEMINI_MODEL,
-          () => this.completeWithGemini(prompt),
-          warnings,
-        );
-      } catch (error) {
-        console.warn('[ai] Gemini insights failed', error instanceof Error ? error.message : error);
-        if (openaiError instanceof QuotaExceededError) throw openaiError;
-        if (error instanceof QuotaExceededError || error instanceof ServiceUnavailableError) throw error;
+      const models = geminiModelCandidates(this.env.GEMINI_MODEL);
+      for (const model of models) {
+        try {
+          console.info(`[ai] Using Gemini model ${model}`);
+          return await this.completeWithProvider(
+            'gemini',
+            model,
+            () => this.completeWithGemini(prompt, model),
+            warnings,
+          );
+        } catch (error) {
+          lastError = error;
+          console.warn(
+            `[ai] Gemini model ${model} failed`,
+            error instanceof Error ? error.message : error,
+          );
+        }
       }
     }
 
+    if (lastError instanceof QuotaExceededError || lastError instanceof ServiceUnavailableError) {
+      throw lastError;
+    }
     throw new ServiceUnavailableError('Failed to generate AI insights');
   }
 
@@ -195,8 +220,8 @@ Provide a brief, friendly analysis (2-3 sentences) and exactly 3 Pokémon name r
     return parseInsightsPayload(content);
   }
 
-  private async completeWithGemini(prompt: string): Promise<InsightsPayload> {
-    const model = encodeURIComponent(this.env.GEMINI_MODEL);
+  private async completeWithGemini(prompt: string, modelName: string): Promise<InsightsPayload> {
+    const model = encodeURIComponent(modelName);
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
       {
@@ -209,15 +234,7 @@ Provide a brief, friendly analysis (2-3 sentences) and exactly 3 Pokémon name r
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: {
             responseMimeType: 'application/json',
-            maxOutputTokens: 300,
-            responseSchema: {
-              type: 'OBJECT',
-              properties: {
-                insights: { type: 'STRING' },
-                recommendations: { type: 'ARRAY', items: { type: 'STRING' } },
-              },
-              required: ['insights', 'recommendations'],
-            },
+            maxOutputTokens: 512,
           },
         }),
       },
@@ -228,11 +245,16 @@ Provide a brief, friendly analysis (2-3 sentences) and exactly 3 Pokémon name r
     }
 
     const data = (await response.json()) as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+      candidates?: Array<{
+        content?: { parts?: Array<{ text?: string }> };
+        finishReason?: string;
+      }>;
     };
-    const content = data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('');
-    if (!content) {
-      throw new ServiceUnavailableError('Empty AI response');
+    const content = data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('') ?? '';
+    if (!content.trim()) {
+      throw new ServiceUnavailableError(
+        `Empty AI response (${data.candidates?.[0]?.finishReason ?? 'no content'})`,
+      );
     }
 
     return parseInsightsPayload(content);

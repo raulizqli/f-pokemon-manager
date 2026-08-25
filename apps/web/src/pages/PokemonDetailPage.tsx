@@ -6,7 +6,7 @@ import { Button } from '../components/ui/Button';
 import { Card, CardTitle } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import type { ApiError } from '../services/apiClient';
-import type { CollectionEntry, CollectionStatus, PokemonSummary } from '@pokedex/shared';
+import type { CollectionEntry, EditableCollectionStatus, PokemonSummary } from '@pokedex/shared';
 
 export function PokemonDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -14,7 +14,7 @@ export function PokemonDetailPage() {
   const queryClient = useQueryClient();
   const [nickname, setNickname] = useState('');
   const [notes, setNotes] = useState('');
-  const [status, setStatus] = useState<CollectionStatus>('caught');
+  const [status, setStatus] = useState<EditableCollectionStatus>('caught');
   const [message, setMessage] = useState('');
   const [targetPokemonId, setTargetPokemonId] = useState<number | ''>('');
   const [evolvingEntryId, setEvolvingEntryId] = useState<string | null>(null);
@@ -293,7 +293,7 @@ export function PokemonDetailPage() {
                 <span className="text-sm font-medium text-poke-dark/80">Status</span>
                 <select
                   value={status}
-                  onChange={(e) => setStatus(e.target.value as CollectionStatus)}
+                  onChange={(e) => setStatus(e.target.value as EditableCollectionStatus)}
                   className="w-full rounded-lg border border-poke-dark/15 bg-white px-3 py-2 text-sm"
                 >
                   <option value="caught">Caught</option>
