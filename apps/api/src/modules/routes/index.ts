@@ -78,9 +78,8 @@ export function createAiRouter(controller: AiController): Router {
   const router = Router();
 
   router.use(requireAuth);
-  router.get('/status', (req, res, next) => {
+  router.get('/status', (req, res) => {
     controller.status(req as AuthenticatedRequest, res);
-    next();
   });
   router.post('/insights', (req, res, next) => {
     controller.insights(req as AuthenticatedRequest, res).catch(next);

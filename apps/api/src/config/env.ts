@@ -11,8 +11,16 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('http://localhost:5177'),
   POKEAPI_BASE_URL: z.string().url().default('https://pokeapi.co/api/v2'),
   POKEAPI_CACHE_TTL_MS: z.coerce.number().default(600_000),
-  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_API_KEY: z
+    .string()
+    .optional()
+    .transform((value) => (value?.trim() ? value.trim() : undefined)),
   OPENAI_MODEL: z.string().default('gpt-4o-mini'),
+  GEMINI_API_KEY: z
+    .string()
+    .optional()
+    .transform((value) => (value?.trim() ? value.trim() : undefined)),
+  GEMINI_MODEL: z.string().default('gemini-flash-latest'),
 });
 
 export type Env = z.infer<typeof envSchema>;

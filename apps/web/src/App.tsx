@@ -9,6 +9,8 @@ import { DashboardPage } from './pages/DashboardPage';
 import { ExplorePage } from './pages/ExplorePage';
 import { PokemonDetailPage } from './pages/PokemonDetailPage';
 import { CollectionPage } from './pages/CollectionPage';
+import { TradesPage } from './pages/TradesPage';
+import { ProposeTradePage } from './pages/ProposeTradePage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -43,6 +45,8 @@ export default function App() {
         <Route index element={<DashboardPage />} />
         <Route path="explore" element={<ExplorePage />} />
         <Route path="collection" element={<CollectionPage />} />
+        <Route path="trades" element={<TradesPage />} />
+        <Route path="trades/new/:userId" element={<ProposeTradePage />} />
         <Route path="pokemon/:id" element={<PokemonDetailPage />} />
       </Route>
 

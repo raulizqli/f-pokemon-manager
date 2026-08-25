@@ -1,20 +1,23 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { collectionApi, pokemonApi } from '../services/api';
 import { Button } from '../components/ui/Button';
 import { Card, CardTitle } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import type { ApiError } from '../services/apiClient';
-import type { CollectionEntry, CollectionStatus } from '@pokedex/shared';
+import type { CollectionEntry, CollectionStatus, PokemonSummary } from '@pokedex/shared';
 
 export function PokemonDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [nickname, setNickname] = useState('');
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState<CollectionStatus>('caught');
   const [message, setMessage] = useState('');
+  const [targetPokemonId, setTargetPokemonId] = useState<number | ''>('');
+  const [evolvingEntryId, setEvolvingEntryId] = useState<string | null>(null);
 
   const pokemonQuery = useQuery({
     queryKey: ['pokemon', id],
@@ -27,6 +30,12 @@ export function PokemonDetailPage() {
     queryFn: () => collectionApi.list(),
   });
 
+  const evolutionsQuery = useQuery({
+    queryKey: ['pokemon-evolutions', pokemonQuery.data?.id],
+    queryFn: () => pokemonApi.evolutions(pokemonQuery.data!.id),
+    enabled: Boolean(pokemonQuery.data?.id),
+  });
+
   const ownedEntries =
     collectionQuery.data?.filter((e) => e.pokemonId === pokemonQuery.data?.id) ?? [];
   const shinyOwned = ownedEntries.find((e) => e.isShiny);
@@ -37,6 +46,9 @@ export function PokemonDetailPage() {
     displayEntry?.isShiny && pokemonQuery.data?.spriteShinyUrl
       ? pokemonQuery.data.spriteShinyUrl
       : displayEntry?.spriteUrl ?? pokemonQuery.data?.spriteUrl;
+
+  const evolutions: PokemonSummary[] = evolutionsQuery.data ?? [];
+  const canEvolve = evolutions.length > 0;
 
   const addMutation = useMutation({
     mutationFn: () =>
@@ -62,6 +74,39 @@ export function PokemonDetailPage() {
       setMessage('Removed from collection.');
     },
   });
+
+  const evolveMutation = useMutation({
+    mutationFn: ({ entryId, targetId }: { entryId: string; targetId?: number }) =>
+      collectionApi.evolve(entryId, targetId ? { targetPokemonId: targetId } : {}),
+    onSuccess: (entry) => {
+      queryClient.invalidateQueries({ queryKey: ['collection'] });
+      queryClient.invalidateQueries({ queryKey: ['collection-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['pokemon'] });
+      setEvolvingEntryId(null);
+      setMessage(
+        entry.isShiny
+          ? `Evolved into shiny ${entry.pokemonName}!`
+          : `Evolved into ${entry.pokemonName}!`,
+      );
+      navigate(`/app/pokemon/${entry.pokemonId}`, { replace: true });
+    },
+    onError: (err: unknown) => {
+      setEvolvingEntryId(null);
+      setMessage((err as ApiError).error ?? 'Failed to evolve');
+    },
+  });
+
+  function handleEvolve(entry: CollectionEntry) {
+    if (evolutions.length > 1 && !targetPokemonId) {
+      setMessage('Choose an evolution first');
+      return;
+    }
+    setEvolvingEntryId(entry.id);
+    evolveMutation.mutate({
+      entryId: entry.id,
+      targetId: evolutions.length > 1 ? Number(targetPokemonId) : undefined,
+    });
+  }
 
   if (pokemonQuery.isLoading) {
     return <p className="text-poke-dark/60">Loading Pokémon…</p>;
@@ -128,6 +173,79 @@ export function PokemonDetailPage() {
             ))}
           </ul>
         </Card>
+
+        {ownedEntries.length > 0 && (
+          <Card>
+            <CardTitle>Evolve</CardTitle>
+            {evolutionsQuery.isLoading ? (
+              <p className="mt-3 text-sm text-poke-dark/60">Checking evolution chain…</p>
+            ) : !canEvolve ? (
+              <p className="mt-3 text-sm text-poke-dark/60">This Pokémon cannot evolve further.</p>
+            ) : (
+              <div className="mt-4 space-y-4">
+                <div className="flex flex-wrap gap-3">
+                  {evolutions.map((evo) => (
+                    <div key={evo.id} className="flex items-center gap-2 rounded-lg border border-poke-dark/10 bg-poke-cream/40 px-3 py-2">
+                      {evo.spriteUrl && (
+                        <img src={evo.spriteUrl} alt={evo.name} className="h-10 w-10 object-contain" />
+                      )}
+                      <span className="text-sm capitalize">{evo.name}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {evolutions.length > 1 && (
+                  <label className="block space-y-1">
+                    <span className="text-sm font-medium text-poke-dark/80">Choose evolution</span>
+                    <select
+                      value={targetPokemonId}
+                      onChange={(e) =>
+                        setTargetPokemonId(e.target.value ? Number(e.target.value) : '')
+                      }
+                      className="w-full rounded-lg border border-poke-dark/15 bg-white px-3 py-2 text-sm capitalize"
+                    >
+                      <option value="">Select…</option>
+                      {evolutions.map((evo) => (
+                        <option key={evo.id} value={evo.id}>
+                          {evo.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+
+                {ownedEntries.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-poke-dark/10 px-3 py-2"
+                  >
+                    <p className="text-sm text-poke-dark/70">
+                      Evolve your{' '}
+                      <span className="capitalize">{entry.nickname ?? entry.pokemonName}</span>
+                      {entry.isShiny && (
+                        <span className="ml-2 rounded-full bg-poke-yellow/40 px-2 py-0.5 text-xs font-medium">
+                          Shiny
+                        </span>
+                      )}
+                    </p>
+                    <Button
+                      variant="secondary"
+                      onClick={() => handleEvolve(entry)}
+                      disabled={
+                        evolveMutation.isPending ||
+                        (evolutions.length > 1 && !targetPokemonId)
+                      }
+                    >
+                      {evolvingEntryId === entry.id && evolveMutation.isPending
+                        ? 'Evolving…'
+                        : 'Evolve'}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        )}
 
         <Card>
           <CardTitle>{ownedEntries.length > 0 ? 'In your collection' : 'Add to collection'}</CardTitle>

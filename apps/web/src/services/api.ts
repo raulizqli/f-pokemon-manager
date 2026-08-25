@@ -5,11 +5,17 @@ import type {
   UserProfile,
   PokemonListResponse,
   PokemonDetail,
+  PokemonSummary,
   CollectionEntry,
   CollectionStats,
   CreateCollectionEntryInput,
   UpdateCollectionEntryInput,
+  EvolveCollectionEntryInput,
   AiInsightsResponse,
+  Trade,
+  CreateTradeInput,
+  TrainerSummary,
+  PublicCollectionEntry,
 } from '@pokedex/shared';
 import { apiClient } from './apiClient';
 
@@ -33,6 +39,8 @@ export const pokemonApi = {
   },
   detail: (idOrName: string | number) =>
     apiClient.request<PokemonDetail>(`/api/pokemon/${idOrName}`),
+  evolutions: (idOrName: string | number) =>
+    apiClient.request<PokemonSummary[]>(`/api/pokemon/${idOrName}/evolutions`),
 };
 
 export const collectionApi = {
@@ -46,7 +54,30 @@ export const collectionApi = {
     apiClient.request<CollectionEntry>(`/api/collection/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
   remove: (id: string) =>
     apiClient.request<void>(`/api/collection/${id}`, { method: 'DELETE' }),
+  evolve: (id: string, input: EvolveCollectionEntryInput = {}) =>
+    apiClient.request<CollectionEntry>(`/api/collection/${id}/evolve`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
   stats: () => apiClient.request<CollectionStats>('/api/collection/stats'),
+};
+
+export const tradeApi = {
+  listTrainers: (search?: string) => {
+    const query = search ? `?search=${encodeURIComponent(search)}` : '';
+    return apiClient.request<TrainerSummary[]>(`/api/users${query}`);
+  },
+  trainerCollection: (userId: string) =>
+    apiClient.request<PublicCollectionEntry[]>(`/api/users/${userId}/collection`),
+  list: () => apiClient.request<Trade[]>('/api/trades'),
+  create: (input: CreateTradeInput) =>
+    apiClient.request<Trade>('/api/trades', { method: 'POST', body: JSON.stringify(input) }),
+  accept: (id: string) =>
+    apiClient.request<Trade>(`/api/trades/${id}/accept`, { method: 'POST', body: '{}' }),
+  reject: (id: string) =>
+    apiClient.request<Trade>(`/api/trades/${id}/reject`, { method: 'POST', body: '{}' }),
+  cancel: (id: string) =>
+    apiClient.request<Trade>(`/api/trades/${id}/cancel`, { method: 'POST', body: '{}' }),
 };
 
 export const aiApi = {

@@ -57,6 +57,41 @@ Authorization: Bearer {{login.response.body.accessToken}}
 GET {{baseUrl}}/api/collection/stats
 Authorization: Bearer {{login.response.body.accessToken}}
 
+### List Trainers
+GET {{baseUrl}}/api/users?search=
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Trainer Collection
+GET {{baseUrl}}/api/users/{{recipientId}}/collection
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Propose Trade
+POST {{baseUrl}}/api/trades
+Authorization: Bearer {{login.response.body.accessToken}}
+Content-Type: application/json
+
+{
+  "recipientId": "{{recipientId}}",
+  "offeredEntryId": "{{offeredEntryId}}",
+  "requestedEntryId": "{{requestedEntryId}}"
+}
+
+### List Trades
+GET {{baseUrl}}/api/trades
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Accept Trade
+POST {{baseUrl}}/api/trades/{{tradeId}}/accept
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Reject Trade
+POST {{baseUrl}}/api/trades/{{tradeId}}/reject
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Cancel Trade
+POST {{baseUrl}}/api/trades/{{tradeId}}/cancel
+Authorization: Bearer {{login.response.body.accessToken}}
+
 ### AI Status
 GET {{baseUrl}}/api/ai/status
 Authorization: Bearer {{login.response.body.accessToken}}

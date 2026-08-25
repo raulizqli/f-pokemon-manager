@@ -113,6 +113,9 @@ export class TradeService {
     if (requested.userId !== input.recipientId) {
       throw new BadRequestError('Requested Pokémon does not belong to that trainer');
     }
+    if (offered.status === 'wishlist' || requested.status === 'wishlist') {
+      throw new BadRequestError('Wishlist Pokémon cannot be traded');
+    }
 
     if (offered.pokemonId === requested.pokemonId && offered.isShiny === requested.isShiny) {
       throw new ConflictError('Cannot trade the same species in the same shiny form');

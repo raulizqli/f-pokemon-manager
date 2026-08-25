@@ -39,6 +39,12 @@ export class ServiceUnavailableError extends AppError {
   }
 }
 
+export class QuotaExceededError extends AppError {
+  constructor(message = 'AI quota exceeded') {
+    super(429, message, 'QUOTA_EXCEEDED');
+  }
+}
+
 export class ForbiddenError extends AppError {
   constructor(message = 'Forbidden') {
     super(403, message, 'FORBIDDEN');

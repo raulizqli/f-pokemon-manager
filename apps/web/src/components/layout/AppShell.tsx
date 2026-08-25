@@ -27,6 +27,9 @@ export function AppShell() {
             <NavLink to="/app/collection" className={navLinkClass}>
               My Collection
             </NavLink>
+            <NavLink to="/app/trades" className={navLinkClass}>
+              Trades
+            </NavLink>
           </nav>
           <div className="flex items-center gap-3">
             <span className="hidden text-sm text-poke-dark/60 sm:inline">{user?.displayName}</span>
@@ -44,6 +47,9 @@ export function AppShell() {
           </NavLink>
           <NavLink to="/app/collection" className={navLinkClass}>
             Collection
+          </NavLink>
+          <NavLink to="/app/trades" className={navLinkClass}>
+            Trades
           </NavLink>
         </nav>
       </header>

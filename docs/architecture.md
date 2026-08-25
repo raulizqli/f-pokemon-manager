@@ -41,7 +41,7 @@ Parse and validate request input using Zod schemas from `@pokedex/shared`. Deleg
 - **AuthService** — registration, login, token issuance/refresh, password hashing
 - **PokemonService** — delegates to PokeApiClient
 - **CollectionService** — collection CRUD with ownership checks
-- **AiService** — optional OpenAI insights (env-gated)
+- **AiService** — optional OpenAI insights with Gemini fallback (env-gated)
 
 ### Repositories
 

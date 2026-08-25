@@ -9,6 +9,7 @@ import type { CollectionStatus } from '@pokedex/shared';
 const STATUS_OPTIONS: Array<{ value: CollectionStatus | ''; label: string }> = [
   { value: '', label: 'All' },
   { value: 'caught', label: 'Caught' },
+  { value: 'traded', label: 'Traded' },
   { value: 'wishlist', label: 'Wishlist' },
   { value: 'favorite', label: 'Favorites' },
 ];
@@ -37,7 +38,7 @@ export function CollectionPage() {
           <h1 className="font-serif text-3xl font-bold">My Collection</h1>
           <p className="mt-2 text-poke-dark/60">{query.data?.length ?? 0} Pokémon saved</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {STATUS_OPTIONS.map((opt) => (
             <Button
               key={opt.value}

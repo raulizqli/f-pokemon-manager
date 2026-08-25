@@ -1,18 +1,19 @@
 import { z } from 'zod';
 
-export const collectionStatusSchema = z.enum(['caught', 'wishlist', 'favorite']);
+export const collectionStatusSchema = z.enum(['caught', 'wishlist', 'favorite', 'traded']);
+export const editableCollectionStatusSchema = z.enum(['caught', 'wishlist', 'favorite']);
 
 export const createCollectionEntrySchema = z.object({
   pokemonId: z.number().int().positive(),
   nickname: z.string().max(50).optional(),
   notes: z.string().max(500).optional(),
-  status: collectionStatusSchema.default('caught'),
+  status: editableCollectionStatusSchema.default('caught'),
 });
 
 export const updateCollectionEntrySchema = z.object({
   nickname: z.string().max(50).optional(),
   notes: z.string().max(500).optional(),
-  status: collectionStatusSchema.optional(),
+  status: editableCollectionStatusSchema.optional(),
 });
 
 export const evolveCollectionEntrySchema = z.object({
@@ -39,6 +40,7 @@ export const collectionStatsSchema = z.object({
 });
 
 export type CollectionStatus = z.infer<typeof collectionStatusSchema>;
+export type EditableCollectionStatus = z.infer<typeof editableCollectionStatusSchema>;
 export type CreateCollectionEntryInput = z.infer<typeof createCollectionEntrySchema>;
 export type UpdateCollectionEntryInput = z.infer<typeof updateCollectionEntrySchema>;
 export type EvolveCollectionEntryInput = z.infer<typeof evolveCollectionEntrySchema>;

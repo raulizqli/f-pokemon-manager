@@ -3,7 +3,6 @@ services:
     name: pokedex-api
     runtime: node
     plan: free
-    rootDir: pokedex-manager
     buildCommand: npm install && npm run build -w @pokedex/shared && npm run db:generate -w @pokedex/api && npm run build -w @pokedex/api
     startCommand: cd apps/api && npx prisma migrate deploy && node dist/index.js
     envVars:
@@ -21,12 +20,14 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
+      - key: GEMINI_API_KEY
+        sync: false
     healthCheckPath: /health
 
+  # Static sites do not support plan: free (or any plan field) — omit plan entirely.
   - type: web
     name: pokedex-web
     runtime: static
-    rootDir: pokedex-manager
     buildCommand: npm install && npm run build -w @pokedex/shared && npm run build -w @pokedex/web
     staticPublishPath: apps/web/dist
     envVars:

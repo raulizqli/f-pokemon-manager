@@ -69,11 +69,11 @@ export class TradeRepository {
     return prisma.$transaction(async (tx) => {
       await tx.collectionEntry.update({
         where: { id: offeredEntryId },
-        data: { userId: recipientId },
+        data: { userId: recipientId, status: 'traded' },
       });
       await tx.collectionEntry.update({
         where: { id: requestedEntryId },
-        data: { userId: initiatorId },
+        data: { userId: initiatorId, status: 'traded' },
       });
       return tx.trade.update({
         where: { id: tradeId },

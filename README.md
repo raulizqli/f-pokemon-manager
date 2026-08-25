@@ -8,7 +8,7 @@ Full-stack web application for managing a personal Pokémon collection. Built as
 - **PokéAPI integration** — Browse, search, and view Pokémon details via backend proxy with TTL cache
 - **Personal collection** — Add, update, remove Pokémon with status (caught / wishlist / favorite), nicknames, and notes
 - **Dashboard** — Collection stats and quick navigation
-- **AI insights (bonus)** — Optional OpenAI-powered collection analysis and recommendations
+- **AI insights (bonus)** — Optional OpenAI-powered collection analysis, with Gemini as fallback
 - **Responsive UI** — Mobile-first Tailwind CSS design
 
 ## Tech Stack
@@ -38,6 +38,7 @@ Design patterns used:
 - **DTO validation** — shared Zod schemas in `@pokedex/shared`
 
 See [docs/architecture.md](./docs/architecture.md) for details.
+See [docs/gaps.md](./docs/gaps.md) for known behavioral gaps and quirks.
 
 ## Prerequisites
 
@@ -112,6 +113,7 @@ npm run dev:web   # http://localhost:5177
 | `CORS_ORIGIN` | No | Frontend origin (default: `http://localhost:5177`) |
 | `VITE_API_URL` | No | API URL for frontend (default: `http://localhost:4000`) |
 | `OPENAI_API_KEY` | No | Enables AI collection insights (bonus) |
+| `GEMINI_API_KEY` | No | Gemini fallback if OpenAI fails (or primary if OpenAI is unset) |
 | `POKEAPI_CACHE_TTL_MS` | No | Cache TTL in ms (default: 600000) |
 
 ## API Reference
@@ -187,7 +189,7 @@ npm run test -w @pokedex/api
 2. Create a new **Blueprint** on [Render](https://render.com) pointing to `pokedex-manager/render.yaml`
 3. Set `CORS_ORIGIN` to your static site URL
 4. Set `VITE_API_URL` to your API service URL
-5. Optionally set `OPENAI_API_KEY` for AI insights
+5. Optionally set `OPENAI_API_KEY` (and `GEMINI_API_KEY` as fallback) for AI insights
 
 Alternative: deploy API + DB on Railway, frontend on Vercel/Netlify with the same env vars.
 
@@ -200,7 +202,7 @@ The exam PDF provided a summary without detailed day-by-day specs. This implemen
 3. Data persistence (PostgreSQL collection CRUD)
 4. Responsive UI (mobile-first, all core pages)
 5. Documentation (this README + architecture + API examples)
-6. Bonus: AI insights via OpenAI (optional, env-gated)
+6. Bonus: AI insights via OpenAI with Gemini fallback (optional, env-gated)
 
 ## Project Structure
 

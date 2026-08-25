@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { collectionStatusSchema } from './collection.js';
 
 export const tradeStatusSchema = z.enum(['pending', 'accepted', 'rejected', 'cancelled']);
 
@@ -18,7 +19,7 @@ export const publicCollectionEntrySchema = z.object({
   pokemonName: z.string(),
   spriteUrl: z.string().nullable(),
   nickname: z.string().nullable(),
-  status: z.enum(['caught', 'wishlist', 'favorite']),
+  status: collectionStatusSchema,
   isShiny: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),

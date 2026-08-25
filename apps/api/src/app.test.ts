@@ -14,6 +14,7 @@ const testEnv = {
   POKEAPI_BASE_URL: 'https://pokeapi.co/api/v2',
   POKEAPI_CACHE_TTL_MS: 600_000,
   OPENAI_MODEL: 'gpt-4o-mini',
+  GEMINI_MODEL: 'gemini-2.0-flash',
 };
 
 describe('API smoke tests', () => {
