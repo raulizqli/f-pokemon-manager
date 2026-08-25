@@ -26,7 +26,6 @@ services:
   - type: web
     name: pokedex-web
     runtime: static
-    plan: free
     rootDir: pokedex-manager
     buildCommand: npm install && npm run build -w @pokedex/shared && npm run build -w @pokedex/web
     staticPublishPath: apps/web/dist
