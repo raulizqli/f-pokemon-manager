@@ -1,12 +1,13 @@
 import { Link, Outlet } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../ui/Button';
+import { SiteFooter } from './SiteFooter';
 
 export function PublicLayout() {
   const { isAuthenticated, isLoading } = useAuth();
 
   return (
-    <div className="min-h-screen">
+    <div className="flex min-h-screen flex-col">
       <header className="border-b border-poke-dark/10 bg-white/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
           <Link to="/" className="font-serif text-xl font-bold text-poke-dark">
@@ -30,7 +31,10 @@ export function PublicLayout() {
           </div>
         </div>
       </header>
-      <Outlet />
+      <div className="flex-1">
+        <Outlet />
+      </div>
+      <SiteFooter />
     </div>
   );
 }
