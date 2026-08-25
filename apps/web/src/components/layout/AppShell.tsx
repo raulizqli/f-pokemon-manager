@@ -1,4 +1,4 @@
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../ui/Button';
 
@@ -9,6 +9,12 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
 
 export function AppShell() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  async function handleLogout() {
+    await logout();
+    navigate('/login', { replace: true, state: { notice: 'You have been signed out.' } });
+  }
 
   return (
     <div className="min-h-screen">
@@ -33,7 +39,7 @@ export function AppShell() {
           </nav>
           <div className="flex items-center gap-3">
             <span className="hidden text-sm text-poke-dark/60 sm:inline">{user?.displayName}</span>
-            <Button variant="ghost" onClick={() => logout()}>
+            <Button variant="ghost" onClick={() => void handleLogout()}>
               Log out
             </Button>
           </div>

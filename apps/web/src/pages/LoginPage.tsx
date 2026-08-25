@@ -1,18 +1,30 @@
 import { FormEvent, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card, CardTitle } from '../components/ui/Card';
 import type { ApiError } from '../services/apiClient';
 
+type LoginLocationState = {
+  notice?: string;
+  from?: string;
+};
+
 export function LoginPage() {
-  const { login } = useAuth();
+  const { login, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const locationState = (location.state as LoginLocationState | null) ?? null;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [notice] = useState(locationState?.notice ?? '');
   const [loading, setLoading] = useState(false);
+
+  if (!isLoading && isAuthenticated) {
+    return <Navigate to="/app" replace />;
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -20,7 +32,7 @@ export function LoginPage() {
     setLoading(true);
     try {
       await login({ email, password });
-      navigate('/app');
+      navigate(locationState?.from ?? '/app', { replace: true });
     } catch (err) {
       setError((err as ApiError).error ?? 'Login failed');
     } finally {
@@ -33,6 +45,9 @@ export function LoginPage() {
       <Card>
         <CardTitle>Welcome back</CardTitle>
         <p className="mt-2 text-sm text-poke-dark/60">Sign in to access your collection.</p>
+        {notice && (
+          <p className="mt-4 rounded-lg bg-poke-sage/10 px-3 py-2 text-sm text-poke-dark/80">{notice}</p>
+        )}
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
           <Input

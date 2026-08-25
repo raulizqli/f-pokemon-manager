@@ -1,7 +1,10 @@
 import { Link, Outlet } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../ui/Button';
 
 export function PublicLayout() {
+  const { isAuthenticated, isLoading } = useAuth();
+
   return (
     <div className="min-h-screen">
       <header className="border-b border-poke-dark/10 bg-white/80 backdrop-blur">
@@ -10,12 +13,20 @@ export function PublicLayout() {
             PokéDex Manager
           </Link>
           <div className="flex gap-2">
-            <Link to="/login">
-              <Button variant="ghost">Log in</Button>
-            </Link>
-            <Link to="/register">
-              <Button>Get started</Button>
-            </Link>
+            {!isLoading && isAuthenticated ? (
+              <Link to="/app">
+                <Button>Open app</Button>
+              </Link>
+            ) : (
+              <>
+                <Link to="/login">
+                  <Button variant="ghost">Log in</Button>
+                </Link>
+                <Link to="/register">
+                  <Button>Get started</Button>
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>

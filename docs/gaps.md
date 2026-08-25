@@ -88,3 +88,5 @@ Entries in a **pending** trade cannot be updated, deleted, evolved, or offered a
 - [ ] Logout → subsequent API calls are unauthenticated without reload
 - [ ] Dashboard AI → no insights request until Generate is clicked
 - [ ] Collection Edit → nickname/notes/status via PATCH
+- [ ] Log out → `/login` shows signed-out notice
+- [ ] Visit `/app` while logged out → `/login` with please-sign-in notice

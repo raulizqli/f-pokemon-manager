@@ -4,13 +4,14 @@ Full-stack web application for managing a personal Pokémon collection. Built as
 
 ## Features
 
-- **Authentication** — Register, login, JWT access tokens + opaque refresh rotation, protected routes
+- **Authentication** — Register / login / logout; JWT access + opaque hashed refresh rotation; protected `/app/*` routes
+- **Auth redirects** — Log out and session expiry land on `/login` with a notice; signed-in users are redirected away from `/login` and `/register`
 - **PokéAPI integration** — Browse, search, and view Pokémon details via backend proxy with TTL cache
-- **Personal collection** — Catch Pokémon (server rolls shiny at 30%), status (caught / wishlist / favorite), nicknames, and notes; edit from the collection page
+- **Personal collection** — Catch (server rolls shiny at 30%), edit nickname / notes / status, remove
 - **Evolve** — Evolve owned entries along PokéAPI chains (branch picker when needed); shiny form is preserved
 - **Trades** — 1-for-1 trades between trainers; pending offers lock entries; accept swaps ownership
-- **Dashboard** — Collection stats, trade shortcuts, on-demand AI insights (rate-limited)
-- **AI insights (bonus)** — Optional OpenAI analysis with Gemini fallback (env-gated; button on dashboard)
+- **Dashboard** — Collection stats, trade shortcuts, on-demand AI insights (button + rate-limited)
+- **AI insights (bonus)** — Optional OpenAI analysis with Gemini fallback (env-gated)
 - **Responsive UI** — Mobile-first Tailwind CSS design
 
 ## Tech Stack
@@ -32,84 +33,107 @@ apps/web (React)  ──REST──►  apps/api (Express)  ──►  PostgreSQL
                                     └──► PokéAPI (cached)
 ```
 
-Design patterns used:
-- **Layered architecture** — routes → controllers → services → repositories
-- **Repository pattern** — Prisma data access isolated per domain
-- **Adapter pattern** — `PokeApiClient` normalizes external API responses
-- **Dependency injection** — `createContainer()` wires services in one place
-- **DTO validation** — shared Zod schemas in `@pokedex/shared`
+Design patterns: layered routes → controllers → services → repositories; shared Zod DTOs in `@pokedex/shared`; DI via `createContainer()`.
 
-See [docs/architecture.md](./docs/architecture.md) for details.
-See [docs/gaps.md](./docs/gaps.md) for known behavioral gaps and quirks.
+- Details: [docs/architecture.md](./docs/architecture.md)
+- Known quirks: [docs/gaps.md](./docs/gaps.md)
+- HTTP examples: [docs/api.http](./docs/api.http)
 
 ## Prerequisites
 
-- Node.js 20+
-- npm 10+
-- Docker & Docker Compose (recommended for local setup)
-- PostgreSQL 16 (if running without Docker)
+| Tool | Version |
+|---|---|
+| Node.js | 20+ |
+| npm | 10+ |
+| Docker + Compose | Optional but recommended for Postgres / full stack |
 
-## Quick Start (Docker)
+## Install (local development)
 
-From the repo root:
+Use **one** of the two paths below. Prefer Docker if you want the fewest moving parts.
+
+### Option A — Full stack with Docker
 
 ```bash
+# 1. Clone and enter the repo root
+cd f-pokemon-manager   # or your clone directory name
+
+# 2. Env file (JWT secret + optional AI keys)
 cp .env.example .env
+
+# 3. Build and start db + api + web
 docker compose up --build
 ```
 
-- **Web:** http://localhost:5177
-- **API:** http://localhost:4000
-- **Health:** http://localhost:4000/health
+| Service | URL |
+|---|---|
+| Web | http://localhost:5177 |
+| API | http://localhost:4000 |
+| Health | http://localhost:4000/health |
 
-`VITE_API_URL` is baked into the web image at **build** time (Compose passes it as a build arg). Changing it later requires rebuilding the web service.
+Notes:
 
-## Quick Start (Manual)
+- First boot runs migrations via the API start command in the image / compose flow as configured.
+- `VITE_API_URL` is a **build arg**. Changing the API URL requires `docker compose up --build` again.
+- Default Postgres host port is **5432**. If busy, edit `docker-compose.yml` ports and `DATABASE_URL`.
 
-### 1. Install dependencies
+### Option B — Manual (API + web on the host, Postgres in Docker)
 
 ```bash
+# 1. Install workspace deps (from repo root)
 npm install
-```
 
-### 2. Start PostgreSQL
-
-```bash
+# 2. Start only Postgres
 docker compose up db -d
-```
 
-Default Compose maps Postgres to host port **5432**. If that port is taken, change the mapping in `docker-compose.yml` and set `DATABASE_URL` accordingly.
-
-### 3. Configure environment
-
-```bash
+# 3. Configure env
 cp .env.example .env
 cp apps/web/.env.example apps/web/.env
-```
 
-The API loads `apps/api/.env` then the repo-root `.env` **with override**. Prefer putting secrets in one place, or ensure root values are not empty placeholders that wipe API-local keys.
+# 4. Point DATABASE_URL at local Postgres (default in .env.example is fine if port 5432 is free)
+#    DATABASE_URL=postgresql://pokedex:pokedex@localhost:5432/pokedex
 
-### 4. Run migrations
-
-```bash
+# 5. Generate Prisma client + apply migrations
 npm run db:generate -w @pokedex/api
 npm run db:migrate -w @pokedex/api
-```
 
-### 5. Start dev servers
-
-```bash
+# 6. Run API + web
 npm run dev
 ```
 
-Or in separate terminals:
+| Service | URL |
+|---|---|
+| Web (Vite) | http://localhost:5177 |
+| API | http://localhost:4000 |
+
+Separate terminals if you prefer:
 
 ```bash
-npm run dev:api   # http://localhost:4000
-npm run dev:web   # http://localhost:5177
+npm run dev:api
+npm run dev:web
 ```
 
+### First-run checklist
+
+1. Open http://localhost:5177 → **Get started** (register) or **Log in**
+2. Explore Pokémon → catch one (may roll shiny)
+3. Open **My Collection** → **Edit** nickname / notes / status
+4. Open a detail page → **Evolve** when available
+5. With a second account → **Trades** → propose / accept
+6. Dashboard → **Generate insights** only if AI keys are set
+
+### Common install problems
+
+| Symptom | Fix |
+|---|---|
+| `EADDRINUSE` on 5432 | Change Compose `db` port mapping and `DATABASE_URL` |
+| API can’t reach DB | Wait for `docker compose` health; confirm `DATABASE_URL` |
+| Web calls wrong API | Set `VITE_API_URL` in `apps/web/.env` (dev) or rebuild web with the build arg (Docker/Render) |
+| Empty AI keys wipe real ones | Prefer a single env file; root `.env` **overrides** `apps/api/.env` |
+| Auth “Too many attempts” | Rate limit: 20/min on login/register/refresh |
+
 ## Environment Variables
+
+Copy from [`.env.example`](./.env.example). For local Vite, also copy [`apps/web/.env.example`](./apps/web/.env.example).
 
 | Variable | Required | Description |
 |---|---|---|
@@ -118,10 +142,24 @@ npm run dev:web   # http://localhost:5177
 | `JWT_ACCESS_EXPIRES_IN` | No | Access TTL (default `15m`) |
 | `JWT_REFRESH_EXPIRES_IN` | No | Refresh TTL as `Nd` days (default `7d`). Refresh tokens are opaque random bytes stored as SHA-256 hashes |
 | `CORS_ORIGIN` | No | Frontend origin (default: `http://localhost:5177`) |
-| `VITE_API_URL` | No | API URL for the SPA (**build-time** for Vite / Docker / Render) |
+| `VITE_API_URL` | No | API URL for the SPA (**build-time** for Vite production / Docker / Render) |
 | `OPENAI_API_KEY` | No | Enables AI collection insights (bonus) |
 | `GEMINI_API_KEY` | No | Gemini fallback if OpenAI fails (or primary if OpenAI is unset) |
 | `POKEAPI_CACHE_TTL_MS` | No | Cache TTL in ms (default: 600000) |
+
+## App routes (UI)
+
+| Path | Access | What it does |
+|---|---|---|
+| `/` | Public | Landing |
+| `/login` | Public | Sign in (shows logout / “please sign in” notices) |
+| `/register` | Public | Create account |
+| `/app` | Auth | Dashboard + Generate insights |
+| `/app/explore` | Auth | Catalog browse / search |
+| `/app/pokemon/:id` | Auth | Detail, catch, evolve |
+| `/app/collection` | Auth | Collection list + inline edit / remove |
+| `/app/trades` | Auth | Incoming / outgoing trades |
+| `/app/trades/new/:userId` | Auth | Propose a 1-for-1 trade |
 
 ## API Reference
 
@@ -175,7 +213,7 @@ Wishlist entries cannot be traded. At most one **pending** trade per collection 
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
 | GET | `/api/ai/status` | Yes | Check if AI is enabled |
-| POST | `/api/ai/insights` | Yes | Generate collection insights |
+| POST | `/api/ai/insights` | Yes | Generate collection insights (rate-limited) |
 
 Example register request:
 
@@ -204,14 +242,11 @@ Partial unique indexes: at most one pending trade per `offeredEntryId` / `reques
 ## Testing
 
 ```bash
-# Run all tests
 npm test
-
-# API only (smoke tests hit live PokéAPI; AI unit tests are mocked)
 npm run test -w @pokedex/api
 ```
 
-Coverage includes smoke tests plus unit coverage for trade accept/propose conflicts, shiny uniqueness / evolve branches, and PokéAPI 404 mapping — see [docs/gaps.md](./docs/gaps.md).
+Smoke + unit coverage for trade accept/propose conflicts, shiny uniqueness / evolve branches, and PokéAPI 404 mapping. See [docs/gaps.md](./docs/gaps.md).
 
 ## Deployment (Render)
 
@@ -223,11 +258,7 @@ Coverage includes smoke tests plus unit coverage for trade accept/propose confli
 
 Do **not** set `plan` on the static web service — Render rejects `plan: free` for static sites.
 
-Alternative: deploy API + DB on Railway, frontend on Vercel/Netlify with the same env vars (remember Vite build-time `VITE_API_URL`).
-
 ## Assumed Exam Requirements
-
-The exam PDF provided a summary without detailed day-by-day specs. This implementation covers:
 
 1. Basic authentication (register/login/logout/JWT)
 2. PokéAPI integration (list, search, detail, evolutions)

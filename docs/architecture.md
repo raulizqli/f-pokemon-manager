@@ -75,13 +75,15 @@ Repositories encapsulate Prisma (and raw lock queries for trades). Partial uniqu
 | Route | Access | Page |
 |---|---|---|
 | `/` | Public | Landing |
-| `/login`, `/register` | Public | Auth forms |
+| `/login`, `/register` | Public | Auth forms (redirect to `/app` if already signed in) |
 | `/app` | Protected | Dashboard |
 | `/app/explore` | Protected | Catalog |
-| `/app/collection` | Protected | Collection |
+| `/app/collection` | Protected | Collection (inline edit / remove) |
 | `/app/trades` | Protected | Trades inbox |
 | `/app/trades/new/:userId` | Protected | Propose trade |
 | `/app/pokemon/:id` | Protected | Detail + catch / evolve |
+
+Unauthenticated visits to `/app/*` redirect to `/login` with a notice and the attempted path. **Log out** clears tokens/`apiClient` and navigates to `/login` with a signed-out message.
 
 ### API Client
 
