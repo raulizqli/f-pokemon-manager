@@ -11,7 +11,7 @@ Full-stack web application for managing a personal Pokémon collection. Built as
 - **Evolve** — Evolve owned entries along PokéAPI chains (branch picker when needed); shiny form is preserved
 - **Trades** — 1-for-1 trades between trainers; pending offers lock entries; accept swaps ownership
 - **Dashboard** — Collection stats, trade shortcuts, on-demand AI insights (button + rate-limited)
-- **AI insights (bonus)** — Optional OpenAI analysis with Gemini fallback (env-gated)
+- **AI insights (bonus)** — Optional Gemini analysis with OpenAI fallback (env-gated)
 - **Responsive UI** — Mobile-first Tailwind CSS design
 
 ## Tech Stack
@@ -143,8 +143,8 @@ Copy from [`.env.example`](./.env.example). For local Vite, also copy [`apps/web
 | `JWT_REFRESH_EXPIRES_IN` | No | Refresh TTL as `Nd` days (default `7d`). Refresh tokens are opaque random bytes stored as SHA-256 hashes |
 | `CORS_ORIGIN` | No | Frontend origin (default: `http://localhost:5177`) |
 | `VITE_API_URL` | No | API URL for the SPA (**build-time** for Vite production / Docker / Render) |
-| `OPENAI_API_KEY` | No | Enables AI collection insights (bonus) |
-| `GEMINI_API_KEY` | No | Gemini fallback if OpenAI fails (or primary if OpenAI is unset) |
+| `OPENAI_API_KEY` | No | OpenAI fallback if Gemini fails (or primary if Gemini is unset) |
+| `GEMINI_API_KEY` | No | Primary AI provider for collection insights (bonus) |
 | `POKEAPI_CACHE_TTL_MS` | No | Cache TTL in ms (default: 600000) |
 
 ## App routes (UI)
@@ -266,7 +266,7 @@ Do **not** set `plan` on the static web service — Render rejects `plan: free` 
 4. Trades between users
 5. Responsive UI (mobile-first, core + trades pages)
 6. Documentation (this README + architecture + gaps + API examples)
-7. Bonus: AI insights via OpenAI with Gemini fallback (optional, env-gated)
+7. Bonus: AI insights via Gemini with OpenAI fallback (optional, env-gated)
 
 ## Project Structure
 
