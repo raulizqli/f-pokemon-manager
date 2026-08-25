@@ -82,4 +82,6 @@ model Trade {
   @@index([status])
   @@index([offeredEntryId])
   @@index([requestedEntryId])
+  // Partial unique indexes (pending offered/requested entry) live in
+  // migrations/20260825150000_trade_pending_unique — Prisma cannot express WHERE clauses.
 }

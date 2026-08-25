@@ -138,12 +138,6 @@ export class TradeService {
       throw new ConflictError('That trainer already has your offered Pokémon in that form');
     }
 
-    const offeredPending = await this.trades.findPendingByEntryId(offered.id);
-    const requestedPending = await this.trades.findPendingByEntryId(requested.id);
-    if (offeredPending || requestedPending) {
-      throw new ConflictError('One of these Pokémon is already in a pending trade');
-    }
-
     const trade = await this.trades.create({
       initiatorId: userId,
       recipientId: input.recipientId,
@@ -169,45 +163,7 @@ export class TradeService {
     if (trade.recipientId !== userId) {
       throw new ForbiddenError('Only the recipient can accept this trade');
     }
-    this.requirePending(trade);
-
-    if (!trade.offeredEntryId || !trade.requestedEntryId) {
-      throw new ConflictError('One of the Pokémon is no longer available');
-    }
-
-    const offered = await this.collection.findById(trade.offeredEntryId);
-    const requested = await this.collection.findById(trade.requestedEntryId);
-    if (!offered || !requested) {
-      throw new ConflictError('One of the Pokémon is no longer available');
-    }
-    if (offered.userId !== trade.initiatorId || requested.userId !== trade.recipientId) {
-      throw new ConflictError('Ownership changed; this trade can no longer be completed');
-    }
-
-    const initiatorHasRequested = await this.collection.findByUserPokemonAndShiny(
-      trade.initiatorId,
-      requested.pokemonId,
-      requested.isShiny,
-    );
-    if (initiatorHasRequested) {
-      throw new ConflictError('The initiator already has that Pokémon in that form');
-    }
-    const recipientHasOffered = await this.collection.findByUserPokemonAndShiny(
-      trade.recipientId,
-      offered.pokemonId,
-      offered.isShiny,
-    );
-    if (recipientHasOffered) {
-      throw new ConflictError('You already have the offered Pokémon in that form');
-    }
-
-    const updated = await this.trades.acceptSwap({
-      tradeId: trade.id,
-      offeredEntryId: offered.id,
-      requestedEntryId: requested.id,
-      initiatorId: trade.initiatorId,
-      recipientId: trade.recipientId,
-    });
+    const updated = await this.trades.acceptSwap(trade.id);
     return toTradeDto(updated);
   }
 

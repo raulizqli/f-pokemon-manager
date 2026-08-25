@@ -66,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       onLogout: () => {
         clearTokens();
+        apiClient.clear();
         setUser(null);
       },
     });
@@ -82,13 +83,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
         onLogout: () => {
           clearTokens();
+          apiClient.clear();
           setUser(null);
         },
       });
       authApi
         .me()
         .then((profile) => setUser(profile))
-        .catch(() => clearTokens())
+        .catch(() => {
+          clearTokens();
+          apiClient.clear();
+        })
         .finally(() => setIsLoading(false));
     } else {
       setIsLoading(false);
@@ -121,6 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     clearTokens();
+    apiClient.clear();
     setUser(null);
   }, []);
 

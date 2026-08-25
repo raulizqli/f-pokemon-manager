@@ -10,6 +10,7 @@ export class ApiClient {
   private refreshToken: string | null = null;
   private onTokensUpdated?: (access: string, refresh: string) => void;
   private onLogout?: () => void;
+  private refreshPromise: Promise<boolean> | null = null;
 
   configure(handlers: {
     accessToken?: string | null;
@@ -21,6 +22,12 @@ export class ApiClient {
     this.refreshToken = handlers.refreshToken ?? null;
     this.onTokensUpdated = handlers.onTokensUpdated;
     this.onLogout = handlers.onLogout;
+  }
+
+  clear() {
+    this.accessToken = null;
+    this.refreshToken = null;
+    this.refreshPromise = null;
   }
 
   async request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -52,7 +59,16 @@ export class ApiClient {
     return data as T;
   }
 
-  private async tryRefresh(): Promise<boolean> {
+  private tryRefresh(): Promise<boolean> {
+    if (this.refreshPromise) return this.refreshPromise;
+
+    this.refreshPromise = this.doRefresh().finally(() => {
+      this.refreshPromise = null;
+    });
+    return this.refreshPromise;
+  }
+
+  private async doRefresh(): Promise<boolean> {
     if (!this.refreshToken) return false;
 
     try {
@@ -69,9 +85,13 @@ export class ApiClient {
         return true;
       }
     } catch {
+      this.clear();
       this.onLogout?.();
+      return false;
     }
 
+    this.clear();
+    this.onLogout?.();
     return false;
   }
 }

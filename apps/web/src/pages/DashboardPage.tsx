@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { collectionApi, aiApi, tradeApi } from '../services/api';
@@ -12,13 +13,14 @@ function providerLabel(provider: string): string {
 
 export function DashboardPage() {
   const { user } = useAuth();
+  const [insightsRequested, setInsightsRequested] = useState(false);
   const statsQuery = useQuery({ queryKey: ['collection-stats'], queryFn: collectionApi.stats });
   const tradesQuery = useQuery({ queryKey: ['trades'], queryFn: tradeApi.list });
   const aiStatusQuery = useQuery({ queryKey: ['ai-status'], queryFn: aiApi.status });
   const aiInsightsQuery = useQuery({
     queryKey: ['ai-insights'],
     queryFn: aiApi.insights,
-    enabled: aiStatusQuery.data?.enabled === true,
+    enabled: insightsRequested && aiStatusQuery.data?.enabled === true,
     retry: false,
   });
 
@@ -83,14 +85,28 @@ export function DashboardPage() {
             <code className="rounded bg-poke-cream px-1">GEMINI_API_KEY</code> on the API server to enable
             personalized recommendations.
           </p>
+        ) : !insightsRequested ? (
+          <div className="mt-3">
+            <p className="text-sm text-poke-dark/60">
+              Generate personalized insights on demand to avoid burning AI quota on every visit.
+            </p>
+            <Button className="mt-3" onClick={() => setInsightsRequested(true)}>
+              Generate insights
+            </Button>
+          </div>
         ) : aiInsightsQuery.isLoading ? (
           <p className="mt-3 text-sm text-poke-dark/60">Generating insights…</p>
         ) : aiInsightsQuery.isError ? (
-          <p className="mt-3 text-sm text-red-600">
-            {aiError?.code === 'QUOTA_EXCEEDED'
-              ? aiError.error
-              : "Couldn't generate insights right now. Try refreshing the page."}
-          </p>
+          <div className="mt-3 space-y-3">
+            <p className="text-sm text-red-600">
+              {aiError?.code === 'QUOTA_EXCEEDED'
+                ? aiError.error
+                : "Couldn't generate insights right now. Try again."}
+            </p>
+            <Button variant="secondary" onClick={() => setInsightsRequested(false)}>
+              Dismiss
+            </Button>
+          </div>
         ) : (
           <div className="mt-3 space-y-3">
             {quotaWarning && (

@@ -8,9 +8,10 @@ import type {
 import {
   BadRequestError,
   ConflictError,
+  ForbiddenError,
   NotFoundError,
-  UnauthorizedError,
 } from '../../lib/errors.js';
+import { isUniqueConstraintError } from '../../lib/prismaErrors.js';
 import { PokeApiClient } from '../../lib/pokeApiClient.js';
 import { TradeRepository } from '../trade/tradeRepository.js';
 import { CollectionRepository } from './collectionRepository.js';
@@ -75,22 +76,33 @@ export class CollectionService {
       ? (pokemon.spriteShinyUrl ?? pokemon.spriteUrl)
       : pokemon.spriteUrl;
 
-    const entry = await this.repository.create({
-      userId,
-      pokemonId: pokemon.id,
-      pokemonName: pokemon.name,
-      spriteUrl,
-      nickname: input.nickname,
-      notes: input.notes,
-      status: input.status,
-      isShiny,
-    });
-
-    return toDto(entry);
+    try {
+      const entry = await this.repository.create({
+        userId,
+        pokemonId: pokemon.id,
+        pokemonName: pokemon.name,
+        spriteUrl,
+        nickname: input.nickname,
+        notes: input.notes,
+        status: input.status,
+        isShiny,
+      });
+      return toDto(entry);
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw new ConflictError(
+          isShiny
+            ? 'You already have a shiny of this Pokémon'
+            : 'You already have this Pokémon (non-shiny)',
+        );
+      }
+      throw error;
+    }
   }
 
   async update(userId: string, id: string, input: UpdateCollectionEntryInput): Promise<CollectionEntry> {
     const entry = await this.requireOwned(userId, id);
+    await this.assertNotInPendingTrade(entry.id);
     const updated = await this.repository.update(entry.id, input);
     return toDto(updated);
   }
@@ -142,12 +154,19 @@ export class CollectionService {
       ? (pokemon.spriteShinyUrl ?? pokemon.spriteUrl)
       : pokemon.spriteUrl;
 
-    const updated = await this.repository.updatePokemon(entry.id, {
-      pokemonId: pokemon.id,
-      pokemonName: pokemon.name,
-      spriteUrl,
-    });
-    return toDto(updated);
+    try {
+      const updated = await this.repository.updatePokemon(entry.id, {
+        pokemonId: pokemon.id,
+        pokemonName: pokemon.name,
+        spriteUrl,
+      });
+      return toDto(updated);
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw new ConflictError('You already have this evolved form');
+      }
+      throw error;
+    }
   }
 
   getStats(userId: string): Promise<CollectionStats> {
@@ -157,7 +176,7 @@ export class CollectionService {
   private async requireOwned(userId: string, id: string) {
     const entry = await this.repository.findById(id);
     if (!entry) throw new NotFoundError('Collection entry not found');
-    if (entry.userId !== userId) throw new UnauthorizedError('Not allowed to update this entry');
+    if (entry.userId !== userId) throw new ForbiddenError('Not allowed to update this entry');
     return entry;
   }
 

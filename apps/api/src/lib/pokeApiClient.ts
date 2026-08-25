@@ -1,5 +1,5 @@
 import type { PokemonDetail, PokemonListResponse, PokemonSummary } from '@pokedex/shared';
-import { ServiceUnavailableError } from './errors.js';
+import { NotFoundError, ServiceUnavailableError } from './errors.js';
 import { TtlCache } from './cache.js';
 
 interface PokeApiListResult {
@@ -91,10 +91,7 @@ export class PokeApiClient {
   }
 
   async getPokemon(idOrName: string | number): Promise<PokemonDetail> {
-    const key = String(idOrName).toLowerCase();
-    const cached = this.detailCache.get(key);
-    const pokemon = cached ?? await this.fetchPokemon(key);
-    if (!cached) this.detailCache.set(key, pokemon);
+    const pokemon = await this.loadPokemon(String(idOrName));
     return this.toDetail(pokemon);
   }
 
@@ -181,8 +178,22 @@ export class PokeApiClient {
     return chain;
   }
 
+  private async loadPokemon(idOrName: string): Promise<PokeApiPokemon> {
+    const key = idOrName.toLowerCase();
+    const cached = this.detailCache.get(key);
+    if (cached) return cached;
+    const pokemon = await this.fetchPokemon(key);
+    this.cachePokemon(pokemon);
+    return pokemon;
+  }
+
+  private cachePokemon(pokemon: PokeApiPokemon): void {
+    this.detailCache.set(pokemon.name.toLowerCase(), pokemon);
+    this.detailCache.set(String(pokemon.id), pokemon);
+  }
+
   private async toSummary(name: string): Promise<PokemonSummary> {
-    const pokemon = await this.fetchPokemon(name);
+    const pokemon = await this.loadPokemon(name);
     return {
       id: pokemon.id,
       name: pokemon.name,
@@ -226,12 +237,15 @@ export class PokeApiClient {
   private async fetchJson<T>(url: string): Promise<T> {
     try {
       const response = await fetch(url);
+      if (response.status === 404) {
+        throw new NotFoundError('Pokémon not found');
+      }
       if (!response.ok) {
         throw new ServiceUnavailableError(`PokéAPI request failed: ${response.status}`);
       }
       return (await response.json()) as T;
     } catch (error) {
-      if (error instanceof ServiceUnavailableError) throw error;
+      if (error instanceof NotFoundError || error instanceof ServiceUnavailableError) throw error;
       throw new ServiceUnavailableError('Unable to reach PokéAPI');
     }
   }

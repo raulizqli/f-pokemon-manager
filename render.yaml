@@ -3,7 +3,8 @@ services:
     name: pokedex-api
     runtime: node
     plan: free
-    buildCommand: npm install && npm run build -w @pokedex/shared && npm run db:generate -w @pokedex/api && npm run build -w @pokedex/api
+    # NODE_ENV=production would skip devDependencies; --include=dev keeps types/tsc/prisma available at build.
+    buildCommand: npm install --include=dev && npm run build -w @pokedex/shared && npm run db:generate -w @pokedex/api && npm run build -w @pokedex/api
     startCommand: cd apps/api && npx prisma migrate deploy && node dist/index.js
     envVars:
       - key: NODE_ENV
@@ -28,7 +29,7 @@ services:
   - type: web
     name: pokedex-web
     runtime: static
-    buildCommand: npm install && npm run build -w @pokedex/shared && npm run build -w @pokedex/web
+    buildCommand: npm install --include=dev && npm run build -w @pokedex/shared && npm run build -w @pokedex/web
     staticPublishPath: apps/web/dist
     envVars:
       - key: VITE_API_URL

@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type NextFunction, type Response } from 'express';
 import type { AuthenticatedRequest } from '../../middleware/auth.js';
 import { requireAuth } from '../../middleware/auth.js';
 import type {
@@ -10,24 +10,24 @@ import type {
   TradeController,
 } from './controllers.js';
 
+type AuthHandler = (req: AuthenticatedRequest, res: Response, next: NextFunction) => void;
+
+function wrap(
+  handler: (req: AuthenticatedRequest, res: Response) => Promise<void> | void,
+): AuthHandler {
+  return (req, res, next) => {
+    Promise.resolve(handler(req, res)).catch(next);
+  };
+}
+
 export function createAuthRouter(controller: AuthController): Router {
   const router = Router();
 
-  router.post('/register', (req, res, next) => {
-    controller.register(req as AuthenticatedRequest, res).catch(next);
-  });
-  router.post('/login', (req, res, next) => {
-    controller.login(req as AuthenticatedRequest, res).catch(next);
-  });
-  router.post('/refresh', (req, res, next) => {
-    controller.refresh(req as AuthenticatedRequest, res).catch(next);
-  });
-  router.post('/logout', (req, res, next) => {
-    controller.logout(req as AuthenticatedRequest, res).catch(next);
-  });
-  router.get('/me', requireAuth, (req, res, next) => {
-    controller.me(req as AuthenticatedRequest, res).catch(next);
-  });
+  router.post('/register', wrap((req, res) => controller.register(req, res)));
+  router.post('/login', wrap((req, res) => controller.login(req, res)));
+  router.post('/refresh', wrap((req, res) => controller.refresh(req, res)));
+  router.post('/logout', wrap((req, res) => controller.logout(req, res)));
+  router.get('/me', requireAuth, wrap((req, res) => controller.me(req, res)));
 
   return router;
 }
@@ -35,15 +35,9 @@ export function createAuthRouter(controller: AuthController): Router {
 export function createPokemonRouter(controller: PokemonController): Router {
   const router = Router();
 
-  router.get('/', (req, res, next) => {
-    controller.list(req as AuthenticatedRequest, res).catch(next);
-  });
-  router.get('/:idOrName/evolutions', (req, res, next) => {
-    controller.evolutions(req as AuthenticatedRequest, res).catch(next);
-  });
-  router.get('/:idOrName', (req, res, next) => {
-    controller.detail(req as AuthenticatedRequest, res).catch(next);
-  });
+  router.get('/', wrap((req, res) => controller.list(req, res)));
+  router.get('/:idOrName/evolutions', wrap((req, res) => controller.evolutions(req, res)));
+  router.get('/:idOrName', wrap((req, res) => controller.detail(req, res)));
 
   return router;
 }
@@ -52,24 +46,12 @@ export function createCollectionRouter(controller: CollectionController): Router
   const router = Router();
 
   router.use(requireAuth);
-  router.get('/stats', (req, res, next) => {
-    controller.stats(req as AuthenticatedRequest, res).catch(next);
-  });
-  router.get('/', (req, res, next) => {
-    controller.list(req as AuthenticatedRequest, res).catch(next);
-  });
-  router.post('/', (req, res, next) => {
-    controller.create(req as AuthenticatedRequest, res).catch(next);
-  });
-  router.post('/:id/evolve', (req, res, next) => {
-    controller.evolve(req as AuthenticatedRequest, res).catch(next);
-  });
-  router.patch('/:id', (req, res, next) => {
-    controller.update(req as AuthenticatedRequest, res).catch(next);
-  });
-  router.delete('/:id', (req, res, next) => {
-    controller.remove(req as AuthenticatedRequest, res).catch(next);
-  });
+  router.get('/stats', wrap((req, res) => controller.stats(req, res)));
+  router.get('/', wrap((req, res) => controller.list(req, res)));
+  router.post('/', wrap((req, res) => controller.create(req, res)));
+  router.post('/:id/evolve', wrap((req, res) => controller.evolve(req, res)));
+  router.patch('/:id', wrap((req, res) => controller.update(req, res)));
+  router.delete('/:id', wrap((req, res) => controller.remove(req, res)));
 
   return router;
 }
@@ -78,12 +60,10 @@ export function createAiRouter(controller: AiController): Router {
   const router = Router();
 
   router.use(requireAuth);
-  router.get('/status', (req, res) => {
-    controller.status(req as AuthenticatedRequest, res);
-  });
-  router.post('/insights', (req, res, next) => {
-    controller.insights(req as AuthenticatedRequest, res).catch(next);
-  });
+  router.get('/status', wrap((req, res) => {
+    controller.status(req, res);
+  }));
+  router.post('/insights', wrap((req, res) => controller.insights(req, res)));
 
   return router;
 }
@@ -92,12 +72,8 @@ export function createUsersRouter(controller: UsersController): Router {
   const router = Router();
 
   router.use(requireAuth);
-  router.get('/', (req, res, next) => {
-    controller.list(req as AuthenticatedRequest, res).catch(next);
-  });
-  router.get('/:id/collection', (req, res, next) => {
-    controller.collection(req as AuthenticatedRequest, res).catch(next);
-  });
+  router.get('/', wrap((req, res) => controller.list(req, res)));
+  router.get('/:id/collection', wrap((req, res) => controller.collection(req, res)));
 
   return router;
 }
@@ -106,21 +82,11 @@ export function createTradeRouter(controller: TradeController): Router {
   const router = Router();
 
   router.use(requireAuth);
-  router.get('/', (req, res, next) => {
-    controller.list(req as AuthenticatedRequest, res).catch(next);
-  });
-  router.post('/', (req, res, next) => {
-    controller.create(req as AuthenticatedRequest, res).catch(next);
-  });
-  router.post('/:id/accept', (req, res, next) => {
-    controller.accept(req as AuthenticatedRequest, res).catch(next);
-  });
-  router.post('/:id/reject', (req, res, next) => {
-    controller.reject(req as AuthenticatedRequest, res).catch(next);
-  });
-  router.post('/:id/cancel', (req, res, next) => {
-    controller.cancel(req as AuthenticatedRequest, res).catch(next);
-  });
+  router.get('/', wrap((req, res) => controller.list(req, res)));
+  router.post('/', wrap((req, res) => controller.create(req, res)));
+  router.post('/:id/accept', wrap((req, res) => controller.accept(req, res)));
+  router.post('/:id/reject', wrap((req, res) => controller.reject(req, res)));
+  router.post('/:id/cancel', wrap((req, res) => controller.cancel(req, res)));
 
   return router;
 }

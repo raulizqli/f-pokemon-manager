@@ -4,12 +4,6 @@ Known differences between what users might expect and what the app currently doe
 
 ## High
 
-### Missing Pokémon returns 503, not 404
-
-`PokeApiClient.fetchJson` maps every non-OK PokéAPI response to `ServiceUnavailableError` (503), including upstream **404**. A bad id/name looks like an outage.
-
-- Path: [`apps/api/src/lib/pokeApiClient.ts`](../apps/api/src/lib/pokeApiClient.ts)
-
 ### Render Blueprint `rootDir` / static `plan`
 
 Static sites (`runtime: static`) **must not** set `plan: free` — Render rejects it with `no such plan free for service type web`. Omit `plan` for the static frontend; keep `plan: free` only on the Node web service and Postgres.
@@ -34,15 +28,9 @@ On every `POST /api/collection`, the server rolls `Math.random() < 0.3` (`SHINY_
 
 Uniqueness is `(userId, pokemonId, isShiny)`. You may own normal and shiny of the same species. If you already have the form the roll produces, create returns **409** (common when hunting the other form). Retry until the other form rolls or both are owned.
 
-### Accepted trades force status `traded`
+### Wishlist cannot be traded; favorites can
 
-On accept, both collection entries get `status: 'traded'`. There is no dedicated UI to change status after that; `PATCH /api/collection/:id` exists but the web app does not expose edit (nickname / notes / status).
-
-- Paths: [`apps/api/src/modules/trade/tradeRepository.ts`](../apps/api/src/modules/trade/tradeRepository.ts), collection pages
-
-### Wishlist cannot be traded; favorites and `traded` can
-
-API and propose UI block `wishlist`. Favorites and already-`traded` entries can still be offered.
+API and propose UI block `wishlist`. Favorites can still be offered.
 
 ### Evolve is only on the detail page
 
@@ -52,13 +40,7 @@ Branching chains (e.g. Eevee) require choosing `targetPokemonId` in the UI.
 
 ### Collection edit UI is missing
 
-API supports `PATCH` for nickname, notes, and status. The UI only adds, removes, evolves, and trades.
-
-### Logout may leave tokens in the API client memory
-
-Logout clears `localStorage` and React auth state. The shared `apiClient` instance may still hold tokens until reconfigured or the page reloads.
-
-- Paths: [`apps/web/src/contexts/AuthContext.tsx`](../apps/web/src/contexts/AuthContext.tsx), [`apps/web/src/services/apiClient.ts`](../apps/web/src/services/apiClient.ts)
+API supports `PATCH` for nickname, notes, and status. The UI only adds, removes, evolves, and trades. Entries in a **pending** trade cannot be updated, deleted, or evolved.
 
 ### Env loading order (local)
 
@@ -73,7 +55,6 @@ README / architecture still under-document or omit parts of:
 - Trades (`/app/trades`, `/api/trades`, `/api/users`)
 - Evolve endpoints and UI
 - Shiny catch and uniqueness `(userId, pokemonId, isShiny)`
-- Collection status `traded`
 
 README uniqueness text may still say one entry per `(userId, pokemonId)` only.
 
@@ -83,21 +64,21 @@ README uniqueness text may still say one entry per `(userId, pokemonId)` only.
 
 Search returns a page of matches; the Previous/Next controls are hidden while searching.
 
-### Catalog list hits PokéAPI heavily
+### Catalog list still fetches per-result details
 
-List summaries may fetch details per result (N upstream calls). TTL cache helps, but cold pages are slow.
+List/search builds summaries via detail calls. Detail TTL cache (keyed by name and id) cuts repeat upstream hits; cold pages remain chatty.
 
 ### AI insights are optional and provider-dependent
 
-Requires `OPENAI_API_KEY` and/or `GEMINI_API_KEY`. Without keys, status reports disabled. Behavior depends on which keys are set.
+Requires `OPENAI_API_KEY` and/or `GEMINI_API_KEY`. Dashboard only calls insights after **Generate insights** (not on every visit).
 
 ### Tests are thin for new domains
 
-API smoke covers health, validation, auth gates; little or no automated coverage for trade accept, evolve branching, shiny uniqueness, or PokéAPI 404 mapping. Web has a placeholder smoke test.
+API smoke covers health, validation, auth gates; little or no automated coverage for trade accept races, evolve branching, or shiny uniqueness. Web has a placeholder smoke test.
 
 ### Pending-trade locks
 
-Entries in a **pending** trade cannot be deleted, evolved, or offered again until the trade is accepted, rejected, or cancelled.
+Entries in a **pending** trade cannot be updated, deleted, evolved, or offered again until the trade is accepted, rejected, or cancelled. DB partial unique indexes also enforce one pending trade per entry.
 
 ## Intentional product rules (not bugs)
 
@@ -107,12 +88,14 @@ Entries in a **pending** trade cannot be deleted, evolved, or offered again unti
 | Same form conflict | Cannot receive a species+shiny form you already own |
 | Shiny preserved | Evolve and trade keep `isShiny` and use shiny sprites when applicable |
 | Snapshots | Trade history uses stored name/sprite/shiny even if the entry later evolves or is deleted |
+| After accept | Ownership swaps; both entries become `caught` (usable again) |
 
 ## Quick verification checklist
 
-- [ ] Missing name → currently **503** (gap)
+- [ ] Missing name → **404** `NOT_FOUND`
 - [ ] Add same species twice → second succeeds only if the other shiny form rolls
 - [ ] Evolve from detail → navigates to new species; shiny stays shiny
-- [ ] Trade accept → ownership swaps; both statuses become `traded`
+- [ ] Trade accept → ownership swaps; both statuses become `caught`
 - [ ] Wishlist → not selectable in propose UI; API rejects if forced
-- [ ] Render Blueprint with default `rootDir` → expect failure until fixed
+- [ ] Logout → subsequent API calls are unauthenticated without reload
+- [ ] Dashboard AI → no insights request until Generate is clicked

@@ -1,9 +1,9 @@
 import type { NextFunction, Request, Response } from 'express';
 import type { AuthService } from '../modules/auth/authService.js';
 
-export interface AuthenticatedRequest extends Request {
+export type AuthenticatedRequest = Request & {
   userId?: string;
-}
+};
 
 export function createAuthMiddleware(authService: AuthService) {
   return (req: AuthenticatedRequest, _res: Response, next: NextFunction): void => {

@@ -1,5 +1,5 @@
 import cors from 'cors';
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import type { Env } from './config/env.js';
 import { createContainer } from './config/container.js';
 import { createAuthMiddleware } from './middleware/auth.js';
@@ -22,7 +22,7 @@ export function createApp(env: Env) {
   app.use(requestLogger);
   app.use(createAuthMiddleware(container.authService));
 
-  app.get('/health', (_req, res) => {
+  app.get('/health', (_req: Request, res: Response) => {
     res.json({ status: 'ok', service: 'pokedex-api' });
   });
 
