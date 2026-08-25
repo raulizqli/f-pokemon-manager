@@ -6,6 +6,8 @@ import type {
   PokemonController,
   CollectionController,
   AiController,
+  UsersController,
+  TradeController,
 } from './controllers.js';
 
 export function createAuthRouter(controller: AuthController): Router {
@@ -36,6 +38,9 @@ export function createPokemonRouter(controller: PokemonController): Router {
   router.get('/', (req, res, next) => {
     controller.list(req as AuthenticatedRequest, res).catch(next);
   });
+  router.get('/:idOrName/evolutions', (req, res, next) => {
+    controller.evolutions(req as AuthenticatedRequest, res).catch(next);
+  });
   router.get('/:idOrName', (req, res, next) => {
     controller.detail(req as AuthenticatedRequest, res).catch(next);
   });
@@ -55,6 +60,9 @@ export function createCollectionRouter(controller: CollectionController): Router
   });
   router.post('/', (req, res, next) => {
     controller.create(req as AuthenticatedRequest, res).catch(next);
+  });
+  router.post('/:id/evolve', (req, res, next) => {
+    controller.evolve(req as AuthenticatedRequest, res).catch(next);
   });
   router.patch('/:id', (req, res, next) => {
     controller.update(req as AuthenticatedRequest, res).catch(next);
@@ -76,6 +84,43 @@ export function createAiRouter(controller: AiController): Router {
   });
   router.post('/insights', (req, res, next) => {
     controller.insights(req as AuthenticatedRequest, res).catch(next);
+  });
+
+  return router;
+}
+
+export function createUsersRouter(controller: UsersController): Router {
+  const router = Router();
+
+  router.use(requireAuth);
+  router.get('/', (req, res, next) => {
+    controller.list(req as AuthenticatedRequest, res).catch(next);
+  });
+  router.get('/:id/collection', (req, res, next) => {
+    controller.collection(req as AuthenticatedRequest, res).catch(next);
+  });
+
+  return router;
+}
+
+export function createTradeRouter(controller: TradeController): Router {
+  const router = Router();
+
+  router.use(requireAuth);
+  router.get('/', (req, res, next) => {
+    controller.list(req as AuthenticatedRequest, res).catch(next);
+  });
+  router.post('/', (req, res, next) => {
+    controller.create(req as AuthenticatedRequest, res).catch(next);
+  });
+  router.post('/:id/accept', (req, res, next) => {
+    controller.accept(req as AuthenticatedRequest, res).catch(next);
+  });
+  router.post('/:id/reject', (req, res, next) => {
+    controller.reject(req as AuthenticatedRequest, res).catch(next);
+  });
+  router.post('/:id/cancel', (req, res, next) => {
+    controller.cancel(req as AuthenticatedRequest, res).catch(next);
   });
 
   return router;

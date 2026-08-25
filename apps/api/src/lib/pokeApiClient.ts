@@ -16,8 +16,12 @@ interface PokeApiPokemon {
   weight: number;
   sprites: {
     front_default: string | null;
+    front_shiny: string | null;
     other?: {
-      'official-artwork'?: { front_default: string | null };
+      'official-artwork'?: {
+        front_default: string | null;
+        front_shiny?: string | null;
+      };
     };
   };
   types: Array<{ type: { name: string } }>;
@@ -25,9 +29,34 @@ interface PokeApiPokemon {
   stats: Array<{ base_stat: number; stat: { name: string } }>;
 }
 
+interface PokeApiSpecies {
+  name: string;
+  evolution_chain: { url: string };
+}
+
+interface EvolutionNode {
+  species: { name: string; url: string };
+  evolves_to: EvolutionNode[];
+}
+
+interface PokeApiEvolutionChain {
+  chain: EvolutionNode;
+}
+
+function findEvolutionNode(node: EvolutionNode, speciesName: string): EvolutionNode | null {
+  if (node.species.name === speciesName) return node;
+  for (const child of node.evolves_to) {
+    const found = findEvolutionNode(child, speciesName);
+    if (found) return found;
+  }
+  return null;
+}
+
 export class PokeApiClient {
   private listCache: TtlCache<PokeApiListResult>;
   private detailCache: TtlCache<PokeApiPokemon>;
+  private speciesCache: TtlCache<PokeApiSpecies>;
+  private chainCache: TtlCache<PokeApiEvolutionChain>;
 
   constructor(
     private readonly baseUrl: string,
@@ -35,6 +64,8 @@ export class PokeApiClient {
   ) {
     this.listCache = new TtlCache(ttlMs);
     this.detailCache = new TtlCache(ttlMs);
+    this.speciesCache = new TtlCache(ttlMs);
+    this.chainCache = new TtlCache(ttlMs);
   }
 
   async listPokemon(limit: number, offset: number, search?: string): Promise<PokemonListResponse> {
@@ -65,6 +96,26 @@ export class PokeApiClient {
     const pokemon = cached ?? await this.fetchPokemon(key);
     if (!cached) this.detailCache.set(key, pokemon);
     return this.toDetail(pokemon);
+  }
+
+  async getNextEvolutions(idOrName: string | number): Promise<PokemonSummary[]> {
+    const current = await this.getPokemon(idOrName);
+    const species = await this.getSpecies(current.name);
+    const chain = await this.getEvolutionChain(species.evolution_chain.url);
+    const node = findEvolutionNode(chain.chain, current.name);
+    if (!node) return [];
+    const summaries = await Promise.all(
+      node.evolves_to.map(async (child) => {
+        const detail = await this.getPokemon(child.species.name);
+        return {
+          id: detail.id,
+          name: detail.name,
+          spriteUrl: detail.spriteUrl,
+          types: detail.types,
+        };
+      }),
+    );
+    return summaries;
   }
 
   private async searchPokemon(search: string, limit: number, offset: number): Promise<PokemonListResponse> {
@@ -114,6 +165,22 @@ export class PokeApiClient {
     return this.fetchJson<PokeApiPokemon>(url);
   }
 
+  private async getSpecies(name: string): Promise<PokeApiSpecies> {
+    const cached = this.speciesCache.get(name);
+    if (cached) return cached;
+    const species = await this.fetchJson<PokeApiSpecies>(`${this.baseUrl}/pokemon-species/${name}`);
+    this.speciesCache.set(name, species);
+    return species;
+  }
+
+  private async getEvolutionChain(url: string): Promise<PokeApiEvolutionChain> {
+    const cached = this.chainCache.get(url);
+    if (cached) return cached;
+    const chain = await this.fetchJson<PokeApiEvolutionChain>(url);
+    this.chainCache.set(url, chain);
+    return chain;
+  }
+
   private async toSummary(name: string): Promise<PokemonSummary> {
     const pokemon = await this.fetchPokemon(name);
     return {
@@ -131,7 +198,7 @@ export class PokeApiClient {
       height: pokemon.height,
       weight: pokemon.weight,
       spriteUrl: this.getSprite(pokemon),
-      spriteShinyUrl: pokemon.sprites.front_default,
+      spriteShinyUrl: this.getShinySprite(pokemon),
       types: pokemon.types.map((t) => t.type.name),
       abilities: pokemon.abilities.map((a) => a.ability.name),
       stats: pokemon.stats.map((s) => ({
@@ -145,6 +212,14 @@ export class PokeApiClient {
     return (
       pokemon.sprites.other?.['official-artwork']?.front_default ??
       pokemon.sprites.front_default
+    );
+  }
+
+  private getShinySprite(pokemon: PokeApiPokemon): string | null {
+    return (
+      pokemon.sprites.other?.['official-artwork']?.front_shiny ??
+      pokemon.sprites.front_shiny ??
+      this.getSprite(pokemon)
     );
   }
 

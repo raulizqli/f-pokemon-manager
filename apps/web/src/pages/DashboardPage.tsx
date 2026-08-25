@@ -24,7 +24,7 @@ export function DashboardPage() {
         <p className="mt-2 text-poke-dark/60">Your personal PokéDex at a glance.</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <p className="text-sm text-poke-dark/60">Total collected</p>
           <p className="mt-2 font-serif text-4xl font-bold">{stats?.total ?? '—'}</p>
@@ -36,6 +36,10 @@ export function DashboardPage() {
         <Card>
           <p className="text-sm text-poke-dark/60">Wishlist</p>
           <p className="mt-2 font-serif text-4xl font-bold">{stats?.byStatus?.wishlist ?? 0}</p>
+        </Card>
+        <Card>
+          <p className="text-sm text-poke-dark/60">Shinies</p>
+          <p className="mt-2 font-serif text-4xl font-bold">{stats?.shinyCount ?? 0}</p>
         </Card>
       </div>
 

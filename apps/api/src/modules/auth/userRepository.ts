@@ -13,4 +13,22 @@ export class UserRepository {
   create(data: { email: string; passwordHash: string; displayName: string }): Promise<User> {
     return prisma.user.create({ data });
   }
+
+  searchExcluding(userId: string, search?: string) {
+    return prisma.user.findMany({
+      where: {
+        id: { not: userId },
+        ...(search
+          ? { displayName: { contains: search, mode: 'insensitive' as const } }
+          : {}),
+      },
+      select: {
+        id: true,
+        displayName: true,
+        _count: { select: { collection: true } },
+      },
+      orderBy: { displayName: 'asc' },
+      take: 50,
+    });
+  }
 }

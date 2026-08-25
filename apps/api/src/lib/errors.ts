@@ -38,3 +38,9 @@ export class ServiceUnavailableError extends AppError {
     super(503, message, 'SERVICE_UNAVAILABLE');
   }
 }
+
+export class ForbiddenError extends AppError {
+  constructor(message = 'Forbidden') {
+    super(403, message, 'FORBIDDEN');
+  }
+}

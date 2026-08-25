@@ -5,13 +5,17 @@ import {
   registerSchema,
   createCollectionEntrySchema,
   updateCollectionEntrySchema,
+  evolveCollectionEntrySchema,
   pokemonListQuerySchema,
+  createTradeSchema,
+  trainerListQuerySchema,
 } from '@pokedex/shared';
 import type { AuthenticatedRequest } from '../../middleware/auth.js';
 import type { AuthService } from '../auth/authService.js';
 import type { CollectionService } from '../collection/collectionService.js';
 import type { PokemonService } from '../pokemon/pokemonService.js';
 import type { AiService } from '../ai/aiService.js';
+import type { TradeService } from '../trade/tradeService.js';
 
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -60,6 +64,12 @@ export class PokemonController {
     const result = await this.pokemonService.getByIdOrName(idOrName);
     res.json(result);
   };
+
+  evolutions = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const idOrName = String(req.params.idOrName);
+    const result = await this.pokemonService.getEvolutions(idOrName);
+    res.json(result);
+  };
 }
 
 export class CollectionController {
@@ -92,6 +102,12 @@ export class CollectionController {
     const stats = await this.collectionService.getStats(req.userId!);
     res.json(stats);
   };
+
+  evolve = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const input = evolveCollectionEntrySchema.parse(req.body ?? {});
+    const entry = await this.collectionService.evolve(req.userId!, String(req.params.id), input);
+    res.json(entry);
+  };
 }
 
 export class AiController {
@@ -104,5 +120,50 @@ export class AiController {
 
   status = (_req: AuthenticatedRequest, res: Response): void => {
     res.json({ enabled: this.aiService.isEnabled() });
+  };
+}
+
+export class UsersController {
+  constructor(private readonly tradeService: TradeService) {}
+
+  list = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const query = trainerListQuerySchema.parse(req.query);
+    const trainers = await this.tradeService.listTrainers(req.userId!, query.search);
+    res.json(trainers);
+  };
+
+  collection = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const entries = await this.tradeService.listTrainerCollection(String(req.params.id));
+    res.json(entries);
+  };
+}
+
+export class TradeController {
+  constructor(private readonly tradeService: TradeService) {}
+
+  list = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const trades = await this.tradeService.list(req.userId!);
+    res.json(trades);
+  };
+
+  create = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const input = createTradeSchema.parse(req.body);
+    const trade = await this.tradeService.create(req.userId!, input);
+    res.status(201).json(trade);
+  };
+
+  accept = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const trade = await this.tradeService.accept(req.userId!, String(req.params.id));
+    res.json(trade);
+  };
+
+  reject = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const trade = await this.tradeService.reject(req.userId!, String(req.params.id));
+    res.json(trade);
+  };
+
+  cancel = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const trade = await this.tradeService.cancel(req.userId!, String(req.params.id));
+    res.json(trade);
   };
 }

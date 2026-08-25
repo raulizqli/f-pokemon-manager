@@ -37,6 +37,7 @@ GET {{baseUrl}}/api/pokemon?search=pika&limit=10
 GET {{baseUrl}}/api/pokemon/25
 
 ### Add to Collection
+# Server rolls isShiny with 30% chance; response includes isShiny + shiny sprite when applicable
 POST {{baseUrl}}/api/collection
 Authorization: Bearer {{login.response.body.accessToken}}
 Content-Type: application/json

@@ -42,4 +42,14 @@ describe('API smoke tests', () => {
     const res = await request(app).get('/api/collection');
     expect(res.status).toBe(401);
   });
+
+  it('GET /api/trades requires auth', async () => {
+    const res = await request(app).get('/api/trades');
+    expect(res.status).toBe(401);
+  });
+
+  it('POST /api/collection/:id/evolve requires auth', async () => {
+    const res = await request(app).post('/api/collection/any-id/evolve').send({});
+    expect(res.status).toBe(401);
+  });
 });

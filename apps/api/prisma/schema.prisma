@@ -8,14 +8,16 @@ datasource db {
 }
 
 model User {
-  id           String           @id @default(cuid())
-  email        String           @unique
-  passwordHash String
-  displayName  String
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-  refreshTokens RefreshToken[]
-  collection   CollectionEntry[]
+  id              String            @id @default(cuid())
+  email           String            @unique
+  passwordHash    String
+  displayName     String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  refreshTokens   RefreshToken[]
+  collection      CollectionEntry[]
+  tradesInitiated Trade[]           @relation("TradesInitiated")
+  tradesReceived  Trade[]           @relation("TradesReceived")
 }
 
 model RefreshToken {
@@ -30,19 +32,54 @@ model RefreshToken {
 }
 
 model CollectionEntry {
-  id          String   @id @default(cuid())
-  userId      String
-  pokemonId   Int
-  pokemonName String
-  spriteUrl   String?
-  nickname    String?
-  notes       String?
-  status      String   @default("caught")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String   @id @default(cuid())
+  userId            String
+  pokemonId         Int
+  pokemonName       String
+  spriteUrl         String?
+  nickname          String?
+  notes             String?
+  status            String   @default("caught")
+  isShiny           Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  offeredInTrades   Trade[]  @relation("TradeOffered")
+  requestedInTrades Trade[]  @relation("TradeRequested")
 
-  @@unique([userId, pokemonId])
+  @@unique([userId, pokemonId, isShiny])
   @@index([userId])
   @@index([status])
+}
+
+model Trade {
+  id                   String   @id @default(cuid())
+  initiatorId          String
+  recipientId          String
+  offeredEntryId       String?
+  requestedEntryId     String?
+  offeredPokemonId     Int
+  offeredPokemonName   String
+  offeredSpriteUrl     String?
+  offeredNickname      String?
+  offeredIsShiny       Boolean  @default(false)
+  requestedPokemonId   Int
+  requestedPokemonName String
+  requestedSpriteUrl   String?
+  requestedNickname    String?
+  requestedIsShiny     Boolean  @default(false)
+  status               String   @default("pending")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  initiator      User             @relation("TradesInitiated", fields: [initiatorId], references: [id], onDelete: Cascade)
+  recipient      User             @relation("TradesReceived", fields: [recipientId], references: [id], onDelete: Cascade)
+  offeredEntry   CollectionEntry? @relation("TradeOffered", fields: [offeredEntryId], references: [id], onDelete: SetNull)
+  requestedEntry CollectionEntry? @relation("TradeRequested", fields: [requestedEntryId], references: [id], onDelete: SetNull)
+
+  @@index([initiatorId])
+  @@index([recipientId])
+  @@index([status])
+  @@index([offeredEntryId])
+  @@index([requestedEntryId])
 }

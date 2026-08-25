@@ -11,4 +11,8 @@ export class PokemonService {
   getByIdOrName(idOrName: string): Promise<PokemonDetail> {
     return this.pokeApi.getPokemon(idOrName);
   }
+
+  getEvolutions(idOrName: string) {
+    return this.pokeApi.getNextEvolutions(idOrName);
+  }
 }

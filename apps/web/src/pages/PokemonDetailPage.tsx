@@ -6,7 +6,7 @@ import { Button } from '../components/ui/Button';
 import { Card, CardTitle } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import type { ApiError } from '../services/apiClient';
-import type { CollectionStatus } from '@pokedex/shared';
+import type { CollectionEntry, CollectionStatus } from '@pokedex/shared';
 
 export function PokemonDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -27,7 +27,16 @@ export function PokemonDetailPage() {
     queryFn: () => collectionApi.list(),
   });
 
-  const existing = collectionQuery.data?.find((e) => e.pokemonId === pokemonQuery.data?.id);
+  const ownedEntries =
+    collectionQuery.data?.filter((e) => e.pokemonId === pokemonQuery.data?.id) ?? [];
+  const shinyOwned = ownedEntries.find((e) => e.isShiny);
+  const normalOwned = ownedEntries.find((e) => !e.isShiny);
+  const ownsBoth = Boolean(shinyOwned && normalOwned);
+  const displayEntry: CollectionEntry | undefined = shinyOwned ?? normalOwned;
+  const displaySprite =
+    displayEntry?.isShiny && pokemonQuery.data?.spriteShinyUrl
+      ? pokemonQuery.data.spriteShinyUrl
+      : displayEntry?.spriteUrl ?? pokemonQuery.data?.spriteUrl;
 
   const addMutation = useMutation({
     mutationFn: () =>
@@ -37,16 +46,16 @@ export function PokemonDetailPage() {
         notes: notes || undefined,
         status,
       }),
-    onSuccess: () => {
+    onSuccess: (entry) => {
       queryClient.invalidateQueries({ queryKey: ['collection'] });
       queryClient.invalidateQueries({ queryKey: ['collection-stats'] });
-      setMessage('Added to your collection!');
+      setMessage(entry.isShiny ? 'Shiny! Added to your collection!' : 'Added to your collection!');
     },
     onError: (err: unknown) => setMessage((err as ApiError).error ?? 'Failed to add'),
   });
 
   const removeMutation = useMutation({
-    mutationFn: () => collectionApi.remove(existing!.id),
+    mutationFn: (entryId: string) => collectionApi.remove(entryId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['collection'] });
       queryClient.invalidateQueries({ queryKey: ['collection-stats'] });
@@ -68,11 +77,16 @@ export function PokemonDetailPage() {
   return (
     <div className="grid gap-8 lg:grid-cols-2">
       <div className="flex flex-col items-center">
-        {pokemon.spriteUrl && (
-          <img src={pokemon.spriteUrl} alt={pokemon.name} className="h-64 w-64 object-contain" />
+        {displaySprite && (
+          <img src={displaySprite} alt={pokemon.name} className="h-64 w-64 object-contain" />
         )}
         <h1 className="mt-4 font-serif text-4xl capitalize">{pokemon.name}</h1>
         <p className="text-poke-dark/60">#{String(pokemon.id).padStart(3, '0')}</p>
+        {displayEntry?.isShiny && (
+          <span className="mt-2 rounded-full bg-poke-yellow/40 px-3 py-1 text-sm font-medium text-poke-dark">
+            Shiny
+          </span>
+        )}
         <div className="mt-3 flex gap-2">
           {pokemon.types.map((type) => (
             <span key={type} className="rounded-full bg-poke-sage px-3 py-1 text-sm capitalize text-white">
@@ -116,19 +130,45 @@ export function PokemonDetailPage() {
         </Card>
 
         <Card>
-          <CardTitle>{existing ? 'In your collection' : 'Add to collection'}</CardTitle>
-          {existing ? (
+          <CardTitle>{ownedEntries.length > 0 ? 'In your collection' : 'Add to collection'}</CardTitle>
+          {ownedEntries.length > 0 && (
             <div className="mt-4 space-y-3">
-              <p className="text-sm text-poke-dark/60">
-                Status: <span className="capitalize">{existing.status}</span>
-                {existing.nickname && ` · Nickname: ${existing.nickname}`}
-              </p>
-              <Button variant="danger" onClick={() => removeMutation.mutate()} disabled={removeMutation.isPending}>
-                Remove from collection
-              </Button>
+              {ownedEntries.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-poke-dark/10 bg-poke-cream/50 px-3 py-2"
+                >
+                  <div>
+                    <p className="text-sm text-poke-dark/80">
+                      <span className="capitalize">{entry.status}</span>
+                      {entry.isShiny && (
+                        <span className="ml-2 rounded-full bg-poke-yellow/40 px-2 py-0.5 text-xs font-medium">
+                          Shiny
+                        </span>
+                      )}
+                      {entry.nickname && ` · ${entry.nickname}`}
+                    </p>
+                  </div>
+                  <Button
+                    variant="danger"
+                    onClick={() => removeMutation.mutate(entry.id)}
+                    disabled={removeMutation.isPending}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
             </div>
-          ) : (
+          )}
+
+          {!ownsBoth && (
             <div className="mt-4 space-y-4">
+              {ownedEntries.length > 0 && (
+                <p className="text-sm text-poke-dark/60">
+                  You can try catching again for a chance at the{' '}
+                  {shinyOwned ? 'normal' : 'shiny'} form (30% shiny rate).
+                </p>
+              )}
               <Input label="Nickname (optional)" value={nickname} onChange={(e) => setNickname(e.target.value)} />
               <Input label="Notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} />
               <label className="block space-y-1">
@@ -144,7 +184,7 @@ export function PokemonDetailPage() {
                 </select>
               </label>
               <Button onClick={() => addMutation.mutate()} disabled={addMutation.isPending}>
-                Add to collection
+                {ownedEntries.length > 0 ? 'Try catch again' : 'Add to collection'}
               </Button>
             </div>
           )}

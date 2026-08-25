@@ -9,6 +9,8 @@ import {
   createAuthRouter,
   createCollectionRouter,
   createPokemonRouter,
+  createTradeRouter,
+  createUsersRouter,
 } from './modules/routes/index.js';
 
 export function createApp(env: Env) {
@@ -27,6 +29,8 @@ export function createApp(env: Env) {
   app.use('/api/auth', createAuthRouter(container.controllers.auth));
   app.use('/api/pokemon', createPokemonRouter(container.controllers.pokemon));
   app.use('/api/collection', createCollectionRouter(container.controllers.collection));
+  app.use('/api/users', createUsersRouter(container.controllers.users));
+  app.use('/api/trades', createTradeRouter(container.controllers.trades));
   app.use('/api/ai', createAiRouter(container.controllers.ai));
 
   app.use(errorHandler);

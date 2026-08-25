@@ -15,6 +15,10 @@ export const updateCollectionEntrySchema = z.object({
   status: collectionStatusSchema.optional(),
 });
 
+export const evolveCollectionEntrySchema = z.object({
+  targetPokemonId: z.number().int().positive().optional(),
+});
+
 export const collectionEntrySchema = z.object({
   id: z.string(),
   pokemonId: z.number(),
@@ -23,6 +27,7 @@ export const collectionEntrySchema = z.object({
   nickname: z.string().nullable(),
   notes: z.string().nullable(),
   status: collectionStatusSchema,
+  isShiny: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -30,10 +35,12 @@ export const collectionEntrySchema = z.object({
 export const collectionStatsSchema = z.object({
   total: z.number(),
   byStatus: z.record(z.number()),
+  shinyCount: z.number(),
 });
 
 export type CollectionStatus = z.infer<typeof collectionStatusSchema>;
 export type CreateCollectionEntryInput = z.infer<typeof createCollectionEntrySchema>;
 export type UpdateCollectionEntryInput = z.infer<typeof updateCollectionEntrySchema>;
+export type EvolveCollectionEntryInput = z.infer<typeof evolveCollectionEntrySchema>;
 export type CollectionEntry = z.infer<typeof collectionEntrySchema>;
 export type CollectionStats = z.infer<typeof collectionStatsSchema>;

@@ -9,12 +9,19 @@ export interface CreateCollectionData {
   nickname?: string;
   notes?: string;
   status: string;
+  isShiny: boolean;
 }
 
 export interface UpdateCollectionData {
   nickname?: string | null;
   notes?: string | null;
   status?: string;
+}
+
+export interface EvolveCollectionData {
+  pokemonId: number;
+  pokemonName: string;
+  spriteUrl: string | null;
 }
 
 export class CollectionRepository {
@@ -29,9 +36,13 @@ export class CollectionRepository {
     return prisma.collectionEntry.findUnique({ where: { id } });
   }
 
-  findByUserAndPokemon(userId: string, pokemonId: number): Promise<CollectionEntry | null> {
+  findByUserPokemonAndShiny(
+    userId: string,
+    pokemonId: number,
+    isShiny: boolean,
+  ): Promise<CollectionEntry | null> {
     return prisma.collectionEntry.findUnique({
-      where: { userId_pokemonId: { userId, pokemonId } },
+      where: { userId_pokemonId_isShiny: { userId, pokemonId, isShiny } },
     });
   }
 
@@ -43,21 +54,29 @@ export class CollectionRepository {
     return prisma.collectionEntry.update({ where: { id }, data });
   }
 
+  updatePokemon(id: string, data: EvolveCollectionData): Promise<CollectionEntry> {
+    return prisma.collectionEntry.update({ where: { id }, data });
+  }
+
   delete(id: string): Promise<CollectionEntry> {
     return prisma.collectionEntry.delete({ where: { id } });
   }
 
-  async getStats(userId: string): Promise<{ total: number; byStatus: Record<string, number> }> {
+  async getStats(
+    userId: string,
+  ): Promise<{ total: number; byStatus: Record<string, number>; shinyCount: number }> {
     const entries = await prisma.collectionEntry.findMany({
       where: { userId },
-      select: { status: true },
+      select: { status: true, isShiny: true },
     });
 
     const byStatus: Record<string, number> = {};
+    let shinyCount = 0;
     for (const entry of entries) {
       byStatus[entry.status] = (byStatus[entry.status] ?? 0) + 1;
+      if (entry.isShiny) shinyCount += 1;
     }
 
-    return { total: entries.length, byStatus };
+    return { total: entries.length, byStatus, shinyCount };
   }
 }

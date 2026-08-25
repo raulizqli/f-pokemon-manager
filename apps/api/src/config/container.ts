@@ -7,23 +7,33 @@ import { CollectionRepository } from '../modules/collection/collectionRepository
 import { CollectionService } from '../modules/collection/collectionService.js';
 import { PokemonService } from '../modules/pokemon/pokemonService.js';
 import { AiService } from '../modules/ai/aiService.js';
+import { TradeRepository } from '../modules/trade/tradeRepository.js';
+import { TradeService } from '../modules/trade/tradeService.js';
 import {
   AuthController,
   PokemonController,
   CollectionController,
   AiController,
+  UsersController,
+  TradeController,
 } from '../modules/routes/controllers.js';
 
 export function createContainer(env: Env) {
   const userRepository = new UserRepository();
   const refreshTokenRepository = new RefreshTokenRepository();
   const collectionRepository = new CollectionRepository();
+  const tradeRepository = new TradeRepository();
   const pokeApiClient = new PokeApiClient(env.POKEAPI_BASE_URL, env.POKEAPI_CACHE_TTL_MS);
 
   const authService = new AuthService(userRepository, refreshTokenRepository, env);
   const pokemonService = new PokemonService(pokeApiClient);
-  const collectionService = new CollectionService(collectionRepository, pokeApiClient);
+  const collectionService = new CollectionService(
+    collectionRepository,
+    pokeApiClient,
+    tradeRepository,
+  );
   const aiService = new AiService(env, collectionRepository, pokeApiClient);
+  const tradeService = new TradeService(tradeRepository, userRepository, collectionRepository);
 
   return {
     authService,
@@ -32,6 +42,8 @@ export function createContainer(env: Env) {
       pokemon: new PokemonController(pokemonService),
       collection: new CollectionController(collectionService),
       ai: new AiController(aiService),
+      users: new UsersController(tradeService),
+      trades: new TradeController(tradeService),
     },
   };
 }

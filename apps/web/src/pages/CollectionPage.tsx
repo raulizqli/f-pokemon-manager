@@ -85,6 +85,11 @@ export function CollectionPage() {
                   <span className="mt-1 inline-block rounded-full bg-poke-sage/10 px-2 py-0.5 text-xs capitalize text-poke-sage">
                     {entry.status}
                   </span>
+                  {entry.isShiny && (
+                    <span className="mt-1 ml-2 inline-block rounded-full bg-poke-yellow/40 px-2 py-0.5 text-xs font-medium text-poke-dark">
+                      Shiny
+                    </span>
+                  )}
                   {entry.notes && <p className="mt-2 text-sm text-poke-dark/60">{entry.notes}</p>}
                 </div>
               </div>
