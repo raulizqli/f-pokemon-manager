@@ -130,28 +130,6 @@ Provide a brief, friendly analysis (2-3 sentences) and exactly 3 Pokémon name r
     const warnings: AiWarning[] = [];
     let lastError: unknown;
 
-    if (this.env.OPENAI_API_KEY) {
-      try {
-        return await this.completeWithProvider('openai', this.env.OPENAI_MODEL, () =>
-          this.completeWithOpenAi(prompt),
-        );
-      } catch (error) {
-        lastError = error;
-        console.warn(
-          '[ai] OpenAI failed — switching to Gemini fallback',
-          error instanceof Error ? error.message : error,
-        );
-        if (error instanceof QuotaExceededError) {
-          warnings.push({ code: 'QUOTA_EXCEEDED', provider: 'openai' });
-        }
-        if (!this.env.GEMINI_API_KEY) {
-          throw error instanceof QuotaExceededError || error instanceof ServiceUnavailableError
-            ? error
-            : new ServiceUnavailableError('Failed to generate AI insights');
-        }
-      }
-    }
-
     if (this.env.GEMINI_API_KEY) {
       const models = geminiModelCandidates(this.env.GEMINI_MODEL);
       for (const model of models) {
@@ -169,6 +147,36 @@ Provide a brief, friendly analysis (2-3 sentences) and exactly 3 Pokémon name r
             `[ai] Gemini model ${model} failed`,
             error instanceof Error ? error.message : error,
           );
+          if (error instanceof QuotaExceededError) {
+            warnings.push({ code: 'QUOTA_EXCEEDED', provider: 'gemini' });
+          }
+        }
+      }
+      if (!this.env.OPENAI_API_KEY) {
+        if (lastError instanceof QuotaExceededError || lastError instanceof ServiceUnavailableError) {
+          throw lastError;
+        }
+        throw new ServiceUnavailableError('Failed to generate AI insights');
+      }
+      console.warn('[ai] Gemini failed — switching to OpenAI fallback');
+    }
+
+    if (this.env.OPENAI_API_KEY) {
+      try {
+        return await this.completeWithProvider(
+          'openai',
+          this.env.OPENAI_MODEL,
+          () => this.completeWithOpenAi(prompt),
+          warnings,
+        );
+      } catch (error) {
+        lastError = error;
+        console.warn(
+          '[ai] OpenAI failed',
+          error instanceof Error ? error.message : error,
+        );
+        if (error instanceof QuotaExceededError) {
+          warnings.push({ code: 'QUOTA_EXCEEDED', provider: 'openai' });
         }
       }
     }

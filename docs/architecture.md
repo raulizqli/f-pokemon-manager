@@ -42,7 +42,7 @@ Parse and validate request input using Zod schemas from `@pokedex/shared`. Deleg
 - **PokemonService** — catalog, detail, and next evolutions via PokeApiClient
 - **CollectionService** — catch (shiny roll), update, delete, evolve; ownership → 403; pending-trade locks; unique conflicts → 409
 - **TradeService** — trainer discovery, propose / accept / reject / cancel with form-uniqueness rules
-- **AiService** — optional OpenAI insights with Gemini fallback (env-gated)
+- **AiService** — optional Gemini insights with OpenAI fallback (env-gated)
 
 ### Repositories
 

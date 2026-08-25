@@ -81,8 +81,8 @@ export function DashboardPage() {
         <CardTitle>AI Collection Insights</CardTitle>
         {!aiStatusQuery.data?.enabled ? (
           <p className="mt-3 text-sm text-poke-dark/60">
-            AI insights are disabled. Set <code className="rounded bg-poke-cream px-1">OPENAI_API_KEY</code> or{' '}
-            <code className="rounded bg-poke-cream px-1">GEMINI_API_KEY</code> on the API server to enable
+            AI insights are disabled. Set <code className="rounded bg-poke-cream px-1">GEMINI_API_KEY</code> or{' '}
+            <code className="rounded bg-poke-cream px-1">OPENAI_API_KEY</code> on the API server to enable
             personalized recommendations.
           </p>
         ) : !insightsRequested ? (
@@ -111,7 +111,7 @@ export function DashboardPage() {
           <div className="mt-3 space-y-3">
             {quotaWarning && (
               <p className="rounded-lg bg-poke-yellow/20 px-3 py-2 text-sm text-poke-dark/80">
-                {providerLabel(quotaWarning.provider)} quota exceeded. Showing Gemini results instead.
+                {providerLabel(quotaWarning.provider)} quota exceeded. Showing fallback provider results instead.
               </p>
             )}
             {aiInsightsQuery.data?.insights && (

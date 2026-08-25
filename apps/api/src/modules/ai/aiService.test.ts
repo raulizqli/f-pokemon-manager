@@ -44,37 +44,28 @@ function createService(env: Partial<Env> = {}) {
   return new AiService({ ...baseEnv, ...env }, collectionRepo, pokeApi);
 }
 
-describe('AiService OpenAI → Gemini fallback', () => {
+describe('AiService Gemini → OpenAI fallback', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
-  it('switches to Gemini on any OpenAI failure and returns Gemini provider/model', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        jsonResponse(
-          { error: { message: 'You exceeded your current quota', code: 'insufficient_quota' } },
-          false,
-          429,
-        ),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
-          candidates: [
-            {
-              content: {
-                parts: [
-                  {
-                    text: '{"insights":"Try a Fire type.","recommendations":["Charmander","Vulpix","Growlithe"]}',
-                  },
-                ],
-              },
+  it('uses Gemini first when both keys are set', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      jsonResponse({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: '{"insights":"Try a Fire type.","recommendations":["Charmander","Vulpix","Growlithe"]}',
+                },
+              ],
             },
-          ],
-        }),
-      );
+          },
+        ],
+      }),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await createService({
@@ -86,17 +77,53 @@ describe('AiService OpenAI → Gemini fallback', () => {
     expect(result.provider).toBe('gemini');
     expect(result.model).toBe('gemini-flash-latest');
     expect(result.insights).toBe('Try a Fire type.');
-    expect(result.recommendations).toEqual(['Charmander', 'Vulpix', 'Growlithe']);
-    expect(result.warnings).toEqual([{ code: 'QUOTA_EXCEEDED', provider: 'openai' }]);
-    expect(String(fetchMock.mock.calls[0][0])).toContain('api.openai.com');
-    expect(String(fetchMock.mock.calls[1][0])).toContain('generativelanguage.googleapis.com');
+    expect(String(fetchMock.mock.calls[0][0])).toContain('generativelanguage.googleapis.com');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('switches to OpenAI when all Gemini models fail', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(
+          { error: { message: 'RESOURCE_EXHAUSTED', status: 'RESOURCE_EXHAUSTED' } },
+          false,
+          429,
+        ),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ error: { message: 'high demand' } }, false, 503),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          choices: [
+            {
+              message: {
+                content: '{"insights":"Nice start.","recommendations":["Pikachu","Eevee","Squirtle"]}',
+              },
+            },
+          ],
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await createService({
+      OPENAI_API_KEY: 'openai-key',
+      GEMINI_API_KEY: 'gemini-key',
+      GEMINI_MODEL: 'gemini-flash-latest',
+    }).getInsights('user-1');
+
+    expect(result.provider).toBe('openai');
+    expect(result.model).toBe('gpt-4o-mini');
+    expect(result.insights).toBe('Nice start.');
+    expect(result.warnings).toEqual([{ code: 'QUOTA_EXCEEDED', provider: 'gemini' }]);
+    expect(String(fetchMock.mock.calls.at(-1)?.[0])).toContain('api.openai.com');
   });
 
   it('tries the next Gemini model when the preferred one fails', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ error: { message: 'boom' } }, false, 500))
-      .mockResolvedValueOnce(jsonResponse({ error: { message: 'high demand' } }, false, 503))
       .mockResolvedValueOnce(
         jsonResponse({
           candidates: [
@@ -115,7 +142,6 @@ describe('AiService OpenAI → Gemini fallback', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await createService({
-      OPENAI_API_KEY: 'openai-key',
       GEMINI_API_KEY: 'gemini-key',
       GEMINI_MODEL: 'broken-model',
     }).getInsights('user-1');
@@ -123,16 +149,20 @@ describe('AiService OpenAI → Gemini fallback', () => {
     expect(result.provider).toBe('gemini');
     expect(result.model).toBe('gemini-flash-latest');
     expect(result.insights).toBe('Add Water types.');
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('does not call Gemini when OpenAI succeeds', async () => {
+  it('does not call OpenAI when Gemini succeeds', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(
       jsonResponse({
-        choices: [
+        candidates: [
           {
-            message: {
-              content: '{"insights":"Nice start.","recommendations":["Pikachu","Eevee","Squirtle"]}',
+            content: {
+              parts: [
+                {
+                  text: '{"insights":"Nice start.","recommendations":["Pikachu","Eevee","Squirtle"]}',
+                },
+              ],
             },
           },
         ],
@@ -145,17 +175,17 @@ describe('AiService OpenAI → Gemini fallback', () => {
       GEMINI_API_KEY: 'gemini-key',
     }).getInsights('user-1');
 
-    expect(result.provider).toBe('openai');
-    expect(result.model).toBe('gpt-4o-mini');
+    expect(result.provider).toBe('gemini');
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('generativelanguage.googleapis.com');
   });
 
-  it('throws quota when OpenAI is over quota and Gemini is not configured', async () => {
+  it('throws quota when Gemini is over quota and OpenAI is not configured', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
         jsonResponse(
-          { error: { message: 'You exceeded your current quota', code: 'insufficient_quota' } },
+          { error: { message: 'RESOURCE_EXHAUSTED', status: 'RESOURCE_EXHAUSTED' } },
           false,
           429,
         ),
@@ -163,15 +193,15 @@ describe('AiService OpenAI → Gemini fallback', () => {
     );
 
     await expect(
-      createService({ OPENAI_API_KEY: 'openai-key' }).getInsights('user-1'),
+      createService({ GEMINI_API_KEY: 'gemini-key' }).getInsights('user-1'),
     ).rejects.toBeInstanceOf(QuotaExceededError);
   });
 
-  it('throws when OpenAI fails and Gemini is not configured', async () => {
+  it('throws when Gemini fails and OpenAI is not configured', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({}, false, 500)));
 
     await expect(
-      createService({ OPENAI_API_KEY: 'openai-key' }).getInsights('user-1'),
+      createService({ GEMINI_API_KEY: 'gemini-key' }).getInsights('user-1'),
     ).rejects.toBeInstanceOf(ServiceUnavailableError);
   });
 });
