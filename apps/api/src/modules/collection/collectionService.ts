@@ -146,7 +146,11 @@ export class CollectionService {
       entry.isShiny,
     );
     if (already) {
-      throw new ConflictError('You already have this evolved form');
+      throw new ConflictError(
+        entry.isShiny
+          ? `You already have shiny ${target.name}`
+          : `You already have ${target.name}`,
+      );
     }
 
     const pokemon = await this.pokeApi.getPokemon(target.id);
@@ -163,7 +167,11 @@ export class CollectionService {
       return toDto(updated);
     } catch (error) {
       if (isUniqueConstraintError(error)) {
-        throw new ConflictError('You already have this evolved form');
+        throw new ConflictError(
+          entry.isShiny
+            ? `You already have shiny ${target.name}`
+            : `You already have ${target.name}`,
+        );
       }
       throw error;
     }

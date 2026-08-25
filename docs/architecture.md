@@ -59,8 +59,9 @@ Repositories encapsulate Prisma (and raw lock queries for trades). Partial uniqu
 
 - Normalizes responses to shared DTOs (including shiny sprite URLs)
 - TTL in-memory cache for lists, details (keyed by name and id), species, and evolution chains
-- Search loads the full name catalog once (then filters in memory)
-- Upstream **404** → `NotFoundError`; other failures → `ServiceUnavailableError`
+- Search loads the name catalog in one high-limit list request (then filters in memory)
+- List summaries use CDN artwork from list ids; types via concurrency-capped detail fetches (8s timeout)
+- Upstream **404** → `NotFoundError`; timeouts / other failures → `ServiceUnavailableError`
 
 ## Frontend Architecture
 
@@ -103,11 +104,11 @@ Uses PokéAPI evolution chain; preserves `isShiny` and sprite choice; conflicts 
 ## Security
 
 - Passwords hashed with bcrypt (12 rounds)
-- Refresh tokens: opaque random bytes, stored as SHA-256 hashes (never plain text in DB)
+- Refresh tokens: opaque random bytes, stored as SHA-256 hashes; rotation is a single DB transaction (consume old → insert new)
 - Access tokens short-lived JWT (15m default), signed with `JWT_ACCESS_SECRET`
-- `JWT_REFRESH_SECRET` is validated at startup but not used for signing (opaque refresh model)
+- Auth login/register/refresh rate-limited (20/min/IP); AI insights 5/min/IP; JSON body capped at 100kb
 - Collection mutations scoped to authenticated `userId`; wrong owner → **403** (not 401)
-- CORS restricted to configured origin
+- CORS restricted to configured origin (Bearer auth; no cookie credentials)
 - Tokens live in **localStorage** (XSS-sensitive); suitable for the exam demo, not hardened production sessions
 
 ## Caching Strategy
@@ -116,10 +117,9 @@ PokeApiClient uses in-memory TTL cache (default 10 minutes):
 
 - List responses keyed by `limit:offset`
 - Detail responses keyed by id and name
-- Full name list cached for search
+- Name catalog for search loaded in one high-limit list request
 - Species and evolution chain URLs cached
-
-Warm traffic reuses detail cache for list summaries; cold pages still fan out one detail fetch per result.
+- List summaries use CDN artwork from list ids; type hydration uses concurrency-capped detail fetches with an 8s timeout
 
 ## Ops notes
 
@@ -129,10 +129,8 @@ Warm traffic reuses detail cache for list summaries; cold pages still fan out on
 
 ## Future Improvements
 
-- Integration tests for concurrent trades, shiny uniqueness, and evolve branches
-- httpOnly refresh cookies (or documented XSS threat model) and atomic server-side refresh rotation
-- Rate limits on auth/AI; helmet; JSON body size limit
-- Denser PokéAPI list payload / timeouts to cut cold N+1 cost
-- Collection edit UI for existing PATCH
+- httpOnly refresh cookies (or documented XSS threat model remains)
+- Helmet and broader API hardening
 - Redis cache for multi-instance API deployments
 - E2E tests with Playwright
+- Search pagination controls in Explore UI

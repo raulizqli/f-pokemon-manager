@@ -6,10 +6,10 @@ Full-stack web application for managing a personal Pokémon collection. Built as
 
 - **Authentication** — Register, login, JWT access tokens + opaque refresh rotation, protected routes
 - **PokéAPI integration** — Browse, search, and view Pokémon details via backend proxy with TTL cache
-- **Personal collection** — Catch Pokémon (server rolls shiny at 30%), status (caught / wishlist / favorite), nicknames, and notes
+- **Personal collection** — Catch Pokémon (server rolls shiny at 30%), status (caught / wishlist / favorite), nicknames, and notes; edit from the collection page
 - **Evolve** — Evolve owned entries along PokéAPI chains (branch picker when needed); shiny form is preserved
 - **Trades** — 1-for-1 trades between trainers; pending offers lock entries; accept swaps ownership
-- **Dashboard** — Collection stats, trade shortcuts, on-demand AI insights
+- **Dashboard** — Collection stats, trade shortcuts, on-demand AI insights (rate-limited)
 - **AI insights (bonus)** — Optional OpenAI analysis with Gemini fallback (env-gated; button on dashboard)
 - **Responsive UI** — Mobile-first Tailwind CSS design
 
@@ -115,9 +115,8 @@ npm run dev:web   # http://localhost:5177
 |---|---|---|
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
 | `JWT_ACCESS_SECRET` | Yes | Min 16 chars; signs access JWTs |
-| `JWT_REFRESH_SECRET` | Yes | Min 16 chars; required by env validation. Refresh tokens are opaque random bytes stored as SHA-256 hashes — this value is **not** used to sign JWTs today |
 | `JWT_ACCESS_EXPIRES_IN` | No | Access TTL (default `15m`) |
-| `JWT_REFRESH_EXPIRES_IN` | No | Refresh TTL as `Nd` days (default `7d`) |
+| `JWT_REFRESH_EXPIRES_IN` | No | Refresh TTL as `Nd` days (default `7d`). Refresh tokens are opaque random bytes stored as SHA-256 hashes |
 | `CORS_ORIGIN` | No | Frontend origin (default: `http://localhost:5177`) |
 | `VITE_API_URL` | No | API URL for the SPA (**build-time** for Vite / Docker / Render) |
 | `OPENAI_API_KEY` | No | Enables AI collection insights (bonus) |
@@ -212,7 +211,7 @@ npm test
 npm run test -w @pokedex/api
 ```
 
-Coverage is thin for trade races, shiny uniqueness, and evolve branches — see [docs/gaps.md](./docs/gaps.md).
+Coverage includes smoke tests plus unit coverage for trade accept/propose conflicts, shiny uniqueness / evolve branches, and PokéAPI 404 mapping — see [docs/gaps.md](./docs/gaps.md).
 
 ## Deployment (Render)
 

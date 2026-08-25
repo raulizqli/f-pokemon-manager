@@ -1,8 +1,14 @@
 # Behavioral gaps and quirks
 
-Known differences between what users might expect and what the app currently does. Last reviewed against the working tree (trades, evolve, shiny).
+Known differences between what users might expect and what the app currently does. Last reviewed against the working tree (trades, evolve, shiny, hardening).
 
 ## High
+
+### Tokens in localStorage (XSS)
+
+Access and refresh tokens live in `localStorage` and the in-memory `apiClient`. Any XSS can exfiltrate them. Suitable for the exam demo; production would use httpOnly cookies (or similar). CORS is Bearer-only (`credentials` not required).
+
+- Paths: [`apps/web/src/contexts/AuthContext.tsx`](../apps/web/src/contexts/AuthContext.tsx), [`apps/web/src/services/apiClient.ts`](../apps/web/src/services/apiClient.ts)
 
 ### Render Blueprint `rootDir` / static `plan`
 
@@ -38,10 +44,6 @@ API and propose UI block `wishlist`. Favorites can still be offered.
 
 Branching chains (e.g. Eevee) require choosing `targetPokemonId` in the UI.
 
-### Collection edit UI is missing
-
-API supports `PATCH` for nickname, notes, and status. The UI only adds, removes, evolves, and trades. Entries in a **pending** trade cannot be updated, deleted, or evolved.
-
 ### Env loading order (local)
 
 API preloads `apps/api/.env` then the repo-root `.env` with override. An empty root value can wipe a nonempty API-local value for the same key.
@@ -54,21 +56,17 @@ API preloads `apps/api/.env` then the repo-root `.env` with override. An empty r
 
 Search returns a page of matches; the Previous/Next controls are hidden while searching.
 
-### Catalog list still fetches per-result details
+### Catalog list still fetches types per result
 
-List/search builds summaries via detail calls. Detail TTL cache (keyed by name and id) cuts repeat upstream hits; cold pages remain chatty.
+List builds id/name/sprite without waiting on detail for artwork (CDN URL from list id). Types still require capped parallel detail fetches (concurrency 5, 8s timeout). Search loads the name catalog in one high-limit list call.
 
-### AI insights are optional and provider-dependent
+### AI insights are optional and rate-limited
 
-Requires `OPENAI_API_KEY` and/or `GEMINI_API_KEY`. Dashboard only calls insights after **Generate insights** (not on every visit).
-
-### Tests are thin for new domains
-
-API smoke covers health, validation, auth gates; little or no automated coverage for trade accept races, evolve branching, or shiny uniqueness. Web has a placeholder smoke test.
+Requires `OPENAI_API_KEY` and/or `GEMINI_API_KEY`. Dashboard only calls insights after **Generate insights**. `POST /api/ai/insights` is rate-limited (5/min/IP); auth login/register/refresh are 20/min/IP.
 
 ### Pending-trade locks
 
-Entries in a **pending** trade cannot be updated, deleted, evolved, or offered again until the trade is accepted, rejected, or cancelled. DB partial unique indexes also enforce one pending trade per entry.
+Entries in a **pending** trade cannot be updated, deleted, evolved, or offered again until the trade is accepted, rejected, or cancelled. DB partial unique indexes also enforce one pending trade per entry. Collection UI shows the API error when edit/remove hits that lock.
 
 ## Intentional product rules (not bugs)
 
@@ -89,3 +87,4 @@ Entries in a **pending** trade cannot be updated, deleted, evolved, or offered a
 - [ ] Wishlist → not selectable in propose UI; API rejects if forced
 - [ ] Logout → subsequent API calls are unauthenticated without reload
 - [ ] Dashboard AI → no insights request until Generate is clicked
+- [ ] Collection Edit → nickname/notes/status via PATCH

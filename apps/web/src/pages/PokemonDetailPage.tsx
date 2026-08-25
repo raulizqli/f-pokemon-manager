@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { collectionApi, pokemonApi } from '../services/api';
 import { Button } from '../components/ui/Button';
@@ -7,6 +7,24 @@ import { Card, CardTitle } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import type { ApiError } from '../services/apiClient';
 import type { CollectionEntry, EditableCollectionStatus, PokemonSummary } from '@pokedex/shared';
+
+function ownsForm(
+  collection: CollectionEntry[] | undefined,
+  pokemonId: number,
+  isShiny: boolean,
+): boolean {
+  return Boolean(collection?.some((entry) => entry.pokemonId === pokemonId && entry.isShiny === isShiny));
+}
+
+function resolveEvolveTarget(
+  evolutions: PokemonSummary[],
+  targetPokemonId: number | '',
+): PokemonSummary | undefined {
+  if (evolutions.length === 0) return undefined;
+  if (evolutions.length === 1) return evolutions[0];
+  if (!targetPokemonId) return undefined;
+  return evolutions.find((evo) => evo.id === targetPokemonId);
+}
 
 export function PokemonDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -16,6 +34,8 @@ export function PokemonDetailPage() {
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState<EditableCollectionStatus>('caught');
   const [message, setMessage] = useState('');
+  const [messageTone, setMessageTone] = useState<'success' | 'error'>('success');
+  const [evolveError, setEvolveError] = useState('');
   const [targetPokemonId, setTargetPokemonId] = useState<number | ''>('');
   const [evolvingEntryId, setEvolvingEntryId] = useState<string | null>(null);
 
@@ -36,8 +56,9 @@ export function PokemonDetailPage() {
     enabled: Boolean(pokemonQuery.data?.id),
   });
 
+  const collection = collectionQuery.data;
   const ownedEntries =
-    collectionQuery.data?.filter((e) => e.pokemonId === pokemonQuery.data?.id) ?? [];
+    collection?.filter((e) => e.pokemonId === pokemonQuery.data?.id) ?? [];
   const shinyOwned = ownedEntries.find((e) => e.isShiny);
   const normalOwned = ownedEntries.find((e) => !e.isShiny);
   const ownsBoth = Boolean(shinyOwned && normalOwned);
@@ -49,6 +70,7 @@ export function PokemonDetailPage() {
 
   const evolutions: PokemonSummary[] = evolutionsQuery.data ?? [];
   const canEvolve = evolutions.length > 0;
+  const selectedTarget = resolveEvolveTarget(evolutions, targetPokemonId);
 
   const addMutation = useMutation({
     mutationFn: () =>
@@ -61,9 +83,13 @@ export function PokemonDetailPage() {
     onSuccess: (entry) => {
       queryClient.invalidateQueries({ queryKey: ['collection'] });
       queryClient.invalidateQueries({ queryKey: ['collection-stats'] });
+      setMessageTone('success');
       setMessage(entry.isShiny ? 'Shiny! Added to your collection!' : 'Added to your collection!');
     },
-    onError: (err: unknown) => setMessage((err as ApiError).error ?? 'Failed to add'),
+    onError: (err: unknown) => {
+      setMessageTone('error');
+      setMessage((err as ApiError).error ?? 'Failed to add');
+    },
   });
 
   const removeMutation = useMutation({
@@ -71,6 +97,7 @@ export function PokemonDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['collection'] });
       queryClient.invalidateQueries({ queryKey: ['collection-stats'] });
+      setMessageTone('success');
       setMessage('Removed from collection.');
     },
   });
@@ -83,6 +110,8 @@ export function PokemonDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['collection-stats'] });
       queryClient.invalidateQueries({ queryKey: ['pokemon'] });
       setEvolvingEntryId(null);
+      setEvolveError('');
+      setMessageTone('success');
       setMessage(
         entry.isShiny
           ? `Evolved into shiny ${entry.pokemonName}!`
@@ -92,13 +121,44 @@ export function PokemonDetailPage() {
     },
     onError: (err: unknown) => {
       setEvolvingEntryId(null);
-      setMessage((err as ApiError).error ?? 'Failed to evolve');
+      const apiError = err as ApiError;
+      const targetName = selectedTarget?.name;
+      if (apiError.code === 'CONFLICT' && targetName) {
+        setEvolveError(
+          `You already have ${targetName} in your collection, so this one can’t evolve into that form.`,
+        );
+      } else {
+        setEvolveError(apiError.error ?? 'Failed to evolve');
+      }
     },
   });
 
+  function isEvolveBlocked(entry: CollectionEntry): boolean {
+    if (!canEvolve) return true;
+    if (evolutions.length > 1 && !selectedTarget) return true;
+    const target = selectedTarget ?? evolutions[0];
+    if (!target) return true;
+    return ownsForm(collection, target.id, entry.isShiny);
+  }
+
+  function blockedReason(entry: CollectionEntry): string | null {
+    if (!canEvolve) return null;
+    if (evolutions.length > 1 && !selectedTarget) return null;
+    const target = selectedTarget ?? evolutions[0];
+    if (!target || !ownsForm(collection, target.id, entry.isShiny)) return null;
+    const shinyLabel = entry.isShiny ? ' shiny' : '';
+    return `You already have${shinyLabel} ${target.name} in your collection, so this one can’t evolve into that form.`;
+  }
+
   function handleEvolve(entry: CollectionEntry) {
+    setEvolveError('');
     if (evolutions.length > 1 && !targetPokemonId) {
-      setMessage('Choose an evolution first');
+      setEvolveError('Choose an evolution first');
+      return;
+    }
+    const reason = blockedReason(entry);
+    if (reason) {
+      setEvolveError(reason);
       return;
     }
     setEvolvingEntryId(entry.id);
@@ -184,14 +244,33 @@ export function PokemonDetailPage() {
             ) : (
               <div className="mt-4 space-y-4">
                 <div className="flex flex-wrap gap-3">
-                  {evolutions.map((evo) => (
-                    <div key={evo.id} className="flex items-center gap-2 rounded-lg border border-poke-dark/10 bg-poke-cream/40 px-3 py-2">
-                      {evo.spriteUrl && (
-                        <img src={evo.spriteUrl} alt={evo.name} className="h-10 w-10 object-contain" />
-                      )}
-                      <span className="text-sm capitalize">{evo.name}</span>
-                    </div>
-                  ))}
+                  {evolutions.map((evo) => {
+                    const ownedNormal = ownsForm(collection, evo.id, false);
+                    const ownedShiny = ownsForm(collection, evo.id, true);
+                    return (
+                      <div
+                        key={evo.id}
+                        className="flex items-center gap-2 rounded-lg border border-poke-dark/10 bg-poke-cream/40 px-3 py-2"
+                      >
+                        {evo.spriteUrl && (
+                          <img src={evo.spriteUrl} alt={evo.name} className="h-10 w-10 object-contain" />
+                        )}
+                        <div>
+                          <span className="text-sm capitalize">{evo.name}</span>
+                          {(ownedNormal || ownedShiny) && (
+                            <p className="text-xs text-poke-dark/50">
+                              Owned
+                              {ownedNormal && ownedShiny
+                                ? ' (normal & shiny)'
+                                : ownedShiny
+                                  ? ' (shiny)'
+                                  : ' (normal)'}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {evolutions.length > 1 && (
@@ -199,49 +278,70 @@ export function PokemonDetailPage() {
                     <span className="text-sm font-medium text-poke-dark/80">Choose evolution</span>
                     <select
                       value={targetPokemonId}
-                      onChange={(e) =>
-                        setTargetPokemonId(e.target.value ? Number(e.target.value) : '')
-                      }
+                      onChange={(e) => {
+                        setEvolveError('');
+                        setTargetPokemonId(e.target.value ? Number(e.target.value) : '');
+                      }}
                       className="w-full rounded-lg border border-poke-dark/15 bg-white px-3 py-2 text-sm capitalize"
                     >
                       <option value="">Select…</option>
-                      {evolutions.map((evo) => (
-                        <option key={evo.id} value={evo.id}>
-                          {evo.name}
-                        </option>
-                      ))}
+                      {evolutions.map((evo) => {
+                        const ownedByAnyForm =
+                          ownsForm(collection, evo.id, false) || ownsForm(collection, evo.id, true);
+                        return (
+                          <option key={evo.id} value={evo.id}>
+                            {evo.name}
+                            {ownedByAnyForm ? ' (owned)' : ''}
+                          </option>
+                        );
+                      })}
                     </select>
                   </label>
                 )}
 
-                {ownedEntries.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-poke-dark/10 px-3 py-2"
-                  >
-                    <p className="text-sm text-poke-dark/70">
-                      Evolve your{' '}
-                      <span className="capitalize">{entry.nickname ?? entry.pokemonName}</span>
-                      {entry.isShiny && (
-                        <span className="ml-2 rounded-full bg-poke-yellow/40 px-2 py-0.5 text-xs font-medium">
-                          Shiny
-                        </span>
+                {ownedEntries.map((entry) => {
+                  const blocked = isEvolveBlocked(entry);
+                  const reason = blockedReason(entry);
+                  return (
+                    <div key={entry.id} className="space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-poke-dark/10 px-3 py-2">
+                        <p className="text-sm text-poke-dark/70">
+                          Evolve your{' '}
+                          <span className="capitalize">{entry.nickname ?? entry.pokemonName}</span>
+                          {entry.isShiny && (
+                            <span className="ml-2 rounded-full bg-poke-yellow/40 px-2 py-0.5 text-xs font-medium">
+                              Shiny
+                            </span>
+                          )}
+                        </p>
+                        <Button
+                          variant="secondary"
+                          onClick={() => handleEvolve(entry)}
+                          disabled={evolveMutation.isPending || blocked}
+                        >
+                          {evolvingEntryId === entry.id && evolveMutation.isPending
+                            ? 'Evolving…'
+                            : 'Evolve'}
+                        </Button>
+                      </div>
+                      {reason && (
+                        <p className="text-sm text-poke-dark/60">
+                          {reason}{' '}
+                          {selectedTarget && (
+                            <Link
+                              to={`/app/pokemon/${selectedTarget.id}`}
+                              className="capitalize text-poke-sage underline-offset-2 hover:underline"
+                            >
+                              View {selectedTarget.name}
+                            </Link>
+                          )}
+                        </p>
                       )}
-                    </p>
-                    <Button
-                      variant="secondary"
-                      onClick={() => handleEvolve(entry)}
-                      disabled={
-                        evolveMutation.isPending ||
-                        (evolutions.length > 1 && !targetPokemonId)
-                      }
-                    >
-                      {evolvingEntryId === entry.id && evolveMutation.isPending
-                        ? 'Evolving…'
-                        : 'Evolve'}
-                    </Button>
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
+
+                {evolveError && <p className="text-sm text-red-600">{evolveError}</p>}
               </div>
             )}
           </Card>
@@ -306,7 +406,11 @@ export function PokemonDetailPage() {
               </Button>
             </div>
           )}
-          {message && <p className="mt-3 text-sm text-poke-sage">{message}</p>}
+          {message && (
+            <p className={`mt-3 text-sm ${messageTone === 'error' ? 'text-red-600' : 'text-poke-sage'}`}>
+              {message}
+            </p>
+          )}
         </Card>
       </div>
     </div>

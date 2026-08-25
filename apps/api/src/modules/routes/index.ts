@@ -1,4 +1,5 @@
 import { Router, type NextFunction, type Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import type { AuthenticatedRequest } from '../../middleware/auth.js';
 import { requireAuth } from '../../middleware/auth.js';
 import type {
@@ -20,12 +21,28 @@ function wrap(
   };
 }
 
+const authRateLimit = rateLimit({
+  windowMs: 60_000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many auth attempts', code: 'RATE_LIMITED' },
+});
+
+const aiInsightsRateLimit = rateLimit({
+  windowMs: 60_000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many AI insight requests', code: 'RATE_LIMITED' },
+});
+
 export function createAuthRouter(controller: AuthController): Router {
   const router = Router();
 
-  router.post('/register', wrap((req, res) => controller.register(req, res)));
-  router.post('/login', wrap((req, res) => controller.login(req, res)));
-  router.post('/refresh', wrap((req, res) => controller.refresh(req, res)));
+  router.post('/register', authRateLimit, wrap((req, res) => controller.register(req, res)));
+  router.post('/login', authRateLimit, wrap((req, res) => controller.login(req, res)));
+  router.post('/refresh', authRateLimit, wrap((req, res) => controller.refresh(req, res)));
   router.post('/logout', wrap((req, res) => controller.logout(req, res)));
   router.get('/me', requireAuth, wrap((req, res) => controller.me(req, res)));
 
@@ -63,7 +80,7 @@ export function createAiRouter(controller: AiController): Router {
   router.get('/status', wrap((req, res) => {
     controller.status(req, res);
   }));
-  router.post('/insights', wrap((req, res) => controller.insights(req, res)));
+  router.post('/insights', aiInsightsRateLimit, wrap((req, res) => controller.insights(req, res)));
 
   return router;
 }

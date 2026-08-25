@@ -17,8 +17,8 @@ export function createApp(env: Env) {
   const app = express();
   const container = createContainer(env);
 
-  app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
-  app.use(express.json());
+  app.use(cors({ origin: env.CORS_ORIGIN }));
+  app.use(express.json({ limit: '100kb' }));
   app.use(requestLogger);
   app.use(createAuthMiddleware(container.authService));
 

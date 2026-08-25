@@ -1,7 +1,7 @@
+import type { AuthTokens, LoginInput, RegisterInput, UserProfile } from '@pokedex/shared';
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
-import type { AuthTokens, LoginInput, RegisterInput, UserProfile } from '@pokedex/shared';
 import type { Env } from '../../config/env.js';
 import { ConflictError, UnauthorizedError } from '../../lib/errors.js';
 import { RefreshTokenRepository } from './refreshTokenRepository.js';
@@ -50,20 +50,37 @@ export class AuthService {
   }
 
   async refresh(refreshToken: string): Promise<AuthTokens> {
-    const tokenHash = this.hashToken(refreshToken);
-    const stored = await this.refreshTokens.findByHash(tokenHash);
+    const oldHash = this.hashToken(refreshToken);
+    const nextRaw = crypto.randomBytes(48).toString('hex');
+    const rotated = await this.refreshTokens.rotate(oldHash, {
+      tokenHash: this.hashToken(nextRaw),
+      expiresAt: this.getRefreshExpiry(),
+    });
 
-    if (!stored || stored.expiresAt < new Date()) {
+    if (!rotated) {
       throw new UnauthorizedError('Invalid or expired refresh token');
     }
 
-    const user = await this.users.findById(stored.userId);
+    const user = await this.users.findById(rotated.userId);
     if (!user) {
       throw new UnauthorizedError('User not found');
     }
 
-    await this.refreshTokens.deleteByHash(tokenHash);
-    return this.issueTokens(user.id, user.email, user.displayName, user.createdAt);
+    const payload: TokenPayload = { sub: user.id, email: user.email };
+    const accessToken = jwt.sign(payload, this.env.JWT_ACCESS_SECRET, {
+      expiresIn: this.env.JWT_ACCESS_EXPIRES_IN as jwt.SignOptions['expiresIn'],
+    });
+
+    return {
+      accessToken,
+      refreshToken: nextRaw,
+      user: {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        createdAt: user.createdAt.toISOString(),
+      },
+    };
   }
 
   async logout(refreshToken: string): Promise<void> {

@@ -1,5 +1,6 @@
 import type { AiInsightsResponse, AiProvider, AiWarning } from '@pokedex/shared';
 import type { Env } from '../../config/env.js';
+import { mapWithConcurrency } from '../../lib/concurrency.js';
 import { QuotaExceededError, ServiceUnavailableError } from '../../lib/errors.js';
 import type { CollectionRepository } from '../collection/collectionRepository.js';
 import { PokeApiClient } from '../../lib/pokeApiClient.js';
@@ -99,14 +100,18 @@ export class AiService {
     }
 
     const typeCounts: Record<string, number> = {};
-    for (const entry of entries.slice(0, 20)) {
+    const sample = entries.slice(0, 20);
+    const details = await mapWithConcurrency(sample, 5, async (entry) => {
       try {
-        const detail = await this.pokeApi.getPokemon(entry.pokemonId);
-        for (const type of detail.types) {
-          typeCounts[type] = (typeCounts[type] ?? 0) + 1;
-        }
+        return await this.pokeApi.getPokemon(entry.pokemonId);
       } catch {
-        // Skip failed lookups
+        return null;
+      }
+    });
+    for (const detail of details) {
+      if (!detail) continue;
+      for (const type of detail.types) {
+        typeCounts[type] = (typeCounts[type] ?? 0) + 1;
       }
     }
 

@@ -3,7 +3,7 @@ services:
     name: pokedex-api
     runtime: node
     plan: free
-    # NODE_ENV=production would skip devDependencies; --include=dev keeps types/tsc/prisma available at build.
+    # NODE_ENV=production omits devDependencies; --include=dev + root @types keep Express/CORS typings available.
     buildCommand: npm install --include=dev && npm run build -w @pokedex/shared && npm run db:generate -w @pokedex/api && npm run build -w @pokedex/api
     startCommand: cd apps/api && npx prisma migrate deploy && node dist/index.js
     envVars:
@@ -14,8 +14,6 @@ services:
           name: pokedex-db
           property: connectionString
       - key: JWT_ACCESS_SECRET
-        generateValue: true
-      - key: JWT_REFRESH_SECRET
         generateValue: true
       - key: CORS_ORIGIN
         sync: false

@@ -1,6 +1,13 @@
 import type { PokemonDetail, PokemonListResponse, PokemonSummary } from '@pokedex/shared';
 import { NotFoundError, ServiceUnavailableError } from './errors.js';
 import { TtlCache } from './cache.js';
+import { mapWithConcurrency } from './concurrency.js';
+
+const FETCH_TIMEOUT_MS = 8_000;
+const DETAIL_CONCURRENCY = 5;
+const NAME_CATALOG_LIMIT = 2_000;
+const OFFICIAL_ARTWORK_CDN =
+  'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork';
 
 interface PokeApiListResult {
   count: number;
@@ -52,11 +59,21 @@ function findEvolutionNode(node: EvolutionNode, speciesName: string): EvolutionN
   return null;
 }
 
+function parseIdFromPokemonUrl(url: string): number | null {
+  const match = url.match(/\/pokemon\/(\d+)\/?$/);
+  return match ? Number.parseInt(match[1], 10) : null;
+}
+
+function officialArtworkUrl(id: number): string {
+  return `${OFFICIAL_ARTWORK_CDN}/${id}.png`;
+}
+
 export class PokeApiClient {
   private listCache: TtlCache<PokeApiListResult>;
   private detailCache: TtlCache<PokeApiPokemon>;
   private speciesCache: TtlCache<PokeApiSpecies>;
   private chainCache: TtlCache<PokeApiEvolutionChain>;
+  private allNamesCache: string[] | null = null;
 
   constructor(
     private readonly baseUrl: string,
@@ -75,11 +92,11 @@ export class PokeApiClient {
 
     const cacheKey = `list:${limit}:${offset}`;
     const cached = this.listCache.get(cacheKey);
-    const list = cached ?? await this.fetchList(limit, offset);
+    const list = cached ?? (await this.fetchList(limit, offset));
     if (!cached) this.listCache.set(cacheKey, list);
 
-    const summaries = await Promise.all(
-      list.results.map(async (item) => this.toSummary(item.name)),
+    const summaries = await mapWithConcurrency(list.results, DETAIL_CONCURRENCY, (item) =>
+      this.toSummaryFromListItem(item),
     );
 
     return {
@@ -101,18 +118,15 @@ export class PokeApiClient {
     const chain = await this.getEvolutionChain(species.evolution_chain.url);
     const node = findEvolutionNode(chain.chain, current.name);
     if (!node) return [];
-    const summaries = await Promise.all(
-      node.evolves_to.map(async (child) => {
-        const detail = await this.getPokemon(child.species.name);
-        return {
-          id: detail.id,
-          name: detail.name,
-          spriteUrl: detail.spriteUrl,
-          types: detail.types,
-        };
-      }),
-    );
-    return summaries;
+    return mapWithConcurrency(node.evolves_to, DETAIL_CONCURRENCY, async (child) => {
+      const detail = await this.getPokemon(child.species.name);
+      return {
+        id: detail.id,
+        name: detail.name,
+        spriteUrl: detail.spriteUrl,
+        types: detail.types,
+      };
+    });
   }
 
   private async searchPokemon(search: string, limit: number, offset: number): Promise<PokemonListResponse> {
@@ -121,7 +135,7 @@ export class PokeApiClient {
     const filtered = allNames.filter((name) => name.includes(normalized));
     const page = filtered.slice(offset, offset + limit);
 
-    const summaries = await Promise.all(page.map((name) => this.toSummary(name)));
+    const summaries = await mapWithConcurrency(page, DETAIL_CONCURRENCY, (name) => this.toSummary(name));
 
     return {
       count: filtered.length,
@@ -131,30 +145,16 @@ export class PokeApiClient {
     };
   }
 
-  private allNamesCache: string[] | null = null;
-
   private async getAllNames(): Promise<string[]> {
     if (this.allNamesCache) return this.allNamesCache;
-
-    const names: string[] = [];
-    let offset = 0;
-    const limit = 200;
-
-    while (true) {
-      const list = await this.fetchList(limit, offset);
-      names.push(...list.results.map((r) => r.name));
-      if (!list.next) break;
-      offset += limit;
-    }
-
-    this.allNamesCache = names;
-    return names;
+    const list = await this.fetchList(NAME_CATALOG_LIMIT, 0);
+    this.allNamesCache = list.results.map((r) => r.name);
+    return this.allNamesCache;
   }
 
   private async fetchList(limit: number, offset: number): Promise<PokeApiListResult> {
     const url = `${this.baseUrl}/pokemon?limit=${limit}&offset=${offset}`;
-    const response = await this.fetchJson<PokeApiListResult>(url);
-    return response;
+    return this.fetchJson<PokeApiListResult>(url);
   }
 
   private async fetchPokemon(idOrName: string): Promise<PokeApiPokemon> {
@@ -192,12 +192,23 @@ export class PokeApiClient {
     this.detailCache.set(String(pokemon.id), pokemon);
   }
 
+  private async toSummaryFromListItem(item: { name: string; url: string }): Promise<PokemonSummary> {
+    const parsedId = parseIdFromPokemonUrl(item.url);
+    const pokemon = await this.loadPokemon(parsedId != null ? String(parsedId) : item.name);
+    return {
+      id: parsedId ?? pokemon.id,
+      name: item.name,
+      spriteUrl: officialArtworkUrl(parsedId ?? pokemon.id),
+      types: pokemon.types.map((t) => t.type.name),
+    };
+  }
+
   private async toSummary(name: string): Promise<PokemonSummary> {
     const pokemon = await this.loadPokemon(name);
     return {
       id: pokemon.id,
       name: pokemon.name,
-      spriteUrl: this.getSprite(pokemon),
+      spriteUrl: officialArtworkUrl(pokemon.id),
       types: pokemon.types.map((t) => t.type.name),
     };
   }
@@ -208,7 +219,7 @@ export class PokeApiClient {
       name: pokemon.name,
       height: pokemon.height,
       weight: pokemon.weight,
-      spriteUrl: this.getSprite(pokemon),
+      spriteUrl: this.getSprite(pokemon) ?? officialArtworkUrl(pokemon.id),
       spriteShinyUrl: this.getShinySprite(pokemon),
       types: pokemon.types.map((t) => t.type.name),
       abilities: pokemon.abilities.map((a) => a.ability.name),
@@ -235,8 +246,10 @@ export class PokeApiClient {
   }
 
   private async fetchJson<T>(url: string): Promise<T> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: controller.signal });
       if (response.status === 404) {
         throw new NotFoundError('Pokémon not found');
       }
@@ -246,7 +259,12 @@ export class PokeApiClient {
       return (await response.json()) as T;
     } catch (error) {
       if (error instanceof NotFoundError || error instanceof ServiceUnavailableError) throw error;
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new ServiceUnavailableError('PokéAPI request timed out');
+      }
       throw new ServiceUnavailableError('Unable to reach PokéAPI');
+    } finally {
+      clearTimeout(timer);
     }
   }
 }

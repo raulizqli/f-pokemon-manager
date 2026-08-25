@@ -10,7 +10,6 @@ const baseEnv: Env = {
   PORT: 4000,
   DATABASE_URL: 'postgresql://pokedex:pokedex@localhost:5432/pokedex',
   JWT_ACCESS_SECRET: 'test-access-secret-min-16',
-  JWT_REFRESH_SECRET: 'test-refresh-secret-min-16',
   JWT_ACCESS_EXPIRES_IN: '15m',
   JWT_REFRESH_EXPIRES_IN: '7d',
   CORS_ORIGIN: 'http://localhost:5177',
