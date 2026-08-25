@@ -36,6 +36,9 @@ GET {{baseUrl}}/api/pokemon?search=pika&limit=10
 ### Pokémon Detail
 GET {{baseUrl}}/api/pokemon/25
 
+### Next Evolutions
+GET {{baseUrl}}/api/pokemon/25/evolutions
+
 ### Add to Collection
 # Server rolls isShiny with 30% chance; response includes isShiny + shiny sprite when applicable
 POST {{baseUrl}}/api/collection
@@ -47,6 +50,16 @@ Content-Type: application/json
   "nickname": "Sparky",
   "status": "caught",
   "notes": "My first Pokémon!"
+}
+
+### Evolve Collection Entry
+# Optional body when the chain branches (e.g. Eevee)
+POST {{baseUrl}}/api/collection/{{entryId}}/evolve
+Authorization: Bearer {{login.response.body.accessToken}}
+Content-Type: application/json
+
+{
+  "targetPokemonId": 26
 }
 
 ### List Collection

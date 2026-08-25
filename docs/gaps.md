@@ -10,9 +10,9 @@ Static sites (`runtime: static`) **must not** set `plan: free` — Render reject
 
 `rootDir` should be the repo root (omit the field, or use `.`). A nested `pokedex-manager` folder is not present in this repository.
 
-### Docker Compose `VITE_API_URL` at runtime is ineffective
+### Docker Compose `VITE_API_URL` is build-time
 
-Vite bakes `VITE_*` at **build** time. Setting `VITE_API_URL` on the web container in Compose does not change a prebuilt image; rebuild with the correct `ARG`/`ENV` instead.
+Vite bakes `VITE_*` at **build** time. Compose passes `VITE_API_URL` as a **build arg** to the web image. Changing it requires `docker compose up --build` (or rebuild the web service). Runtime `environment:` on the web container cannot rewrite a prebuilt SPA.
 
 - Paths: [`docker-compose.yml`](../docker-compose.yml), [`apps/web/Dockerfile`](../apps/web/Dockerfile)
 
@@ -47,16 +47,6 @@ API supports `PATCH` for nickname, notes, and status. The UI only adds, removes,
 API preloads `apps/api/.env` then the repo-root `.env` with override. An empty root value can wipe a nonempty API-local value for the same key.
 
 - Paths: [`apps/api/src/preloadEnv.ts`](../apps/api/src/preloadEnv.ts) (if present), [`apps/api/src/index.ts`](../apps/api/src/index.ts)
-
-### Docs lag the product
-
-README / architecture still under-document or omit parts of:
-
-- Trades (`/app/trades`, `/api/trades`, `/api/users`)
-- Evolve endpoints and UI
-- Shiny catch and uniqueness `(userId, pokemonId, isShiny)`
-
-README uniqueness text may still say one entry per `(userId, pokemonId)` only.
 
 ## Low
 

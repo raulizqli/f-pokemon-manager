@@ -4,11 +4,13 @@ Full-stack web application for managing a personal Pokémon collection. Built as
 
 ## Features
 
-- **Authentication** — Register, login, JWT access/refresh tokens, protected routes
+- **Authentication** — Register, login, JWT access tokens + opaque refresh rotation, protected routes
 - **PokéAPI integration** — Browse, search, and view Pokémon details via backend proxy with TTL cache
-- **Personal collection** — Add, update, remove Pokémon with status (caught / wishlist / favorite), nicknames, and notes
-- **Dashboard** — Collection stats and quick navigation
-- **AI insights (bonus)** — Optional OpenAI-powered collection analysis, with Gemini as fallback
+- **Personal collection** — Catch Pokémon (server rolls shiny at 30%), status (caught / wishlist / favorite), nicknames, and notes
+- **Evolve** — Evolve owned entries along PokéAPI chains (branch picker when needed); shiny form is preserved
+- **Trades** — 1-for-1 trades between trainers; pending offers lock entries; accept swaps ownership
+- **Dashboard** — Collection stats, trade shortcuts, on-demand AI insights
+- **AI insights (bonus)** — Optional OpenAI analysis with Gemini fallback (env-gated; button on dashboard)
 - **Responsive UI** — Mobile-first Tailwind CSS design
 
 ## Tech Stack
@@ -18,7 +20,7 @@ Full-stack web application for managing a personal Pokémon collection. Built as
 | Frontend | React 19, Vite, TypeScript, Tailwind CSS v4, TanStack Query, React Router |
 | Backend | Node.js, Express, TypeScript, Zod |
 | Database | PostgreSQL, Prisma ORM |
-| Auth | JWT + bcrypt, refresh token rotation |
+| Auth | JWT access + bcrypt; refresh tokens hashed (SHA-256) with rotation |
 | External API | [PokéAPI v2](https://pokeapi.co/) |
 | Deploy | Docker Compose, Render blueprint |
 
@@ -49,8 +51,9 @@ See [docs/gaps.md](./docs/gaps.md) for known behavioral gaps and quirks.
 
 ## Quick Start (Docker)
 
+From the repo root:
+
 ```bash
-cd pokedex-manager
 cp .env.example .env
 docker compose up --build
 ```
@@ -59,22 +62,23 @@ docker compose up --build
 - **API:** http://localhost:4000
 - **Health:** http://localhost:4000/health
 
+`VITE_API_URL` is baked into the web image at **build** time (Compose passes it as a build arg). Changing it later requires rebuilding the web service.
+
 ## Quick Start (Manual)
 
 ### 1. Install dependencies
 
 ```bash
-cd pokedex-manager
 npm install
 ```
 
 ### 2. Start PostgreSQL
 
-Use Docker for just the database:
-
 ```bash
 docker compose up db -d
 ```
+
+Default Compose maps Postgres to host port **5432**. If that port is taken, change the mapping in `docker-compose.yml` and set `DATABASE_URL` accordingly.
 
 ### 3. Configure environment
 
@@ -82,6 +86,8 @@ docker compose up db -d
 cp .env.example .env
 cp apps/web/.env.example apps/web/.env
 ```
+
+The API loads `apps/api/.env` then the repo-root `.env` **with override**. Prefer putting secrets in one place, or ensure root values are not empty placeholders that wipe API-local keys.
 
 ### 4. Run migrations
 
@@ -108,10 +114,12 @@ npm run dev:web   # http://localhost:5177
 | Variable | Required | Description |
 |---|---|---|
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `JWT_ACCESS_SECRET` | Yes | Min 16 chars; signs access tokens |
-| `JWT_REFRESH_SECRET` | Yes | Min 16 chars; signs refresh tokens |
+| `JWT_ACCESS_SECRET` | Yes | Min 16 chars; signs access JWTs |
+| `JWT_REFRESH_SECRET` | Yes | Min 16 chars; required by env validation. Refresh tokens are opaque random bytes stored as SHA-256 hashes — this value is **not** used to sign JWTs today |
+| `JWT_ACCESS_EXPIRES_IN` | No | Access TTL (default `15m`) |
+| `JWT_REFRESH_EXPIRES_IN` | No | Refresh TTL as `Nd` days (default `7d`) |
 | `CORS_ORIGIN` | No | Frontend origin (default: `http://localhost:5177`) |
-| `VITE_API_URL` | No | API URL for frontend (default: `http://localhost:4000`) |
+| `VITE_API_URL` | No | API URL for the SPA (**build-time** for Vite / Docker / Render) |
 | `OPENAI_API_KEY` | No | Enables AI collection insights (bonus) |
 | `GEMINI_API_KEY` | No | Gemini fallback if OpenAI fails (or primary if OpenAI is unset) |
 | `POKEAPI_CACHE_TTL_MS` | No | Cache TTL in ms (default: 600000) |
@@ -124,7 +132,7 @@ npm run dev:web   # http://localhost:5177
 |---|---|---|---|
 | POST | `/api/auth/register` | No | Create account |
 | POST | `/api/auth/login` | No | Sign in |
-| POST | `/api/auth/refresh` | No | Refresh tokens |
+| POST | `/api/auth/refresh` | No | Rotate refresh + issue access |
 | POST | `/api/auth/logout` | No | Invalidate refresh token |
 | GET | `/api/auth/me` | Yes | Current user profile |
 
@@ -134,16 +142,34 @@ npm run dev:web   # http://localhost:5177
 |---|---|---|---|
 | GET | `/api/pokemon?limit&offset&search` | No | Paginated catalog |
 | GET | `/api/pokemon/:idOrName` | No | Pokémon detail |
+| GET | `/api/pokemon/:idOrName/evolutions` | No | Next evolution options |
 
 ### Collection
 
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
 | GET | `/api/collection` | Yes | List user's collection |
-| GET | `/api/collection/stats` | Yes | Collection statistics |
-| POST | `/api/collection` | Yes | Add Pokémon |
-| PATCH | `/api/collection/:id` | Yes | Update entry |
+| GET | `/api/collection/stats` | Yes | Collection statistics (includes shiny count) |
+| POST | `/api/collection` | Yes | Catch / add (server rolls shiny) |
+| POST | `/api/collection/:id/evolve` | Yes | Evolve entry (`targetPokemonId` when branched) |
+| PATCH | `/api/collection/:id` | Yes | Update nickname / notes / status |
 | DELETE | `/api/collection/:id` | Yes | Remove entry |
+
+Ownership failures return **403**. Unique form conflicts return **409**. Entries in a pending trade cannot be updated, deleted, or evolved.
+
+### Users & trades
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| GET | `/api/users?search` | Yes | List other trainers |
+| GET | `/api/users/:id/collection` | Yes | Public view of a trainer’s collection |
+| GET | `/api/trades` | Yes | Trades involving the current user |
+| POST | `/api/trades` | Yes | Propose a 1-for-1 trade |
+| POST | `/api/trades/:id/accept` | Yes | Recipient accepts (ownership swap) |
+| POST | `/api/trades/:id/reject` | Yes | Recipient rejects |
+| POST | `/api/trades/:id/cancel` | Yes | Initiator cancels |
+
+Wishlist entries cannot be traded. At most one **pending** trade per collection entry (enforced in DB).
 
 ### AI (Bonus)
 
@@ -169,9 +195,12 @@ See [docs/api.http](./docs/api.http) for more examples.
 
 - **User** — account credentials and profile
 - **RefreshToken** — hashed refresh tokens with expiry
-- **CollectionEntry** — user's Pokémon with denormalized name/sprite snapshot
+- **CollectionEntry** — owned Pokémon with denormalized name/sprite snapshot and `isShiny`
+- **Trade** — 1-for-1 offers with Pokémon snapshots; status `pending` / `accepted` / `rejected` / `cancelled`
 
-Unique constraint: one entry per `(userId, pokemonId)`.
+Unique constraint on collection: one entry per `(userId, pokemonId, isShiny)` — you may own both normal and shiny of the same species.
+
+Partial unique indexes: at most one pending trade per `offeredEntryId` / `requestedEntryId`.
 
 ## Testing
 
@@ -179,35 +208,40 @@ Unique constraint: one entry per `(userId, pokemonId)`.
 # Run all tests
 npm test
 
-# API only (requires DB for full suite; smoke tests hit PokéAPI)
+# API only (smoke tests hit live PokéAPI; AI unit tests are mocked)
 npm run test -w @pokedex/api
 ```
 
+Coverage is thin for trade races, shiny uniqueness, and evolve branches — see [docs/gaps.md](./docs/gaps.md).
+
 ## Deployment (Render)
 
-1. Fork/push this repo to GitHub
-2. Create a new **Blueprint** on [Render](https://render.com) pointing to `pokedex-manager/render.yaml`
-3. Set `CORS_ORIGIN` to your static site URL
-4. Set `VITE_API_URL` to your API service URL
-5. Optionally set `OPENAI_API_KEY` (and `GEMINI_API_KEY` as fallback) for AI insights
+1. Push this repo to GitHub
+2. Create a **Blueprint** on [Render](https://render.com) using `render.yaml` at the repo root
+3. Set `CORS_ORIGIN` to your static site URL (manual)
+4. Set `VITE_API_URL` to your API service URL (manual; must rebuild the static site after changes)
+5. Optionally set `OPENAI_API_KEY` and/or `GEMINI_API_KEY` for AI insights
 
-Alternative: deploy API + DB on Railway, frontend on Vercel/Netlify with the same env vars.
+Do **not** set `plan` on the static web service — Render rejects `plan: free` for static sites.
+
+Alternative: deploy API + DB on Railway, frontend on Vercel/Netlify with the same env vars (remember Vite build-time `VITE_API_URL`).
 
 ## Assumed Exam Requirements
 
 The exam PDF provided a summary without detailed day-by-day specs. This implementation covers:
 
 1. Basic authentication (register/login/logout/JWT)
-2. PokéAPI integration (list, search, detail)
-3. Data persistence (PostgreSQL collection CRUD)
-4. Responsive UI (mobile-first, all core pages)
-5. Documentation (this README + architecture + API examples)
-6. Bonus: AI insights via OpenAI with Gemini fallback (optional, env-gated)
+2. PokéAPI integration (list, search, detail, evolutions)
+3. Data persistence (PostgreSQL collection CRUD + shiny + evolve)
+4. Trades between users
+5. Responsive UI (mobile-first, core + trades pages)
+6. Documentation (this README + architecture + gaps + API examples)
+7. Bonus: AI insights via OpenAI with Gemini fallback (optional, env-gated)
 
 ## Project Structure
 
 ```
-pokedex-manager/
+.
 ├── apps/
 │   ├── api/          # Express REST API
 │   └── web/          # React SPA
